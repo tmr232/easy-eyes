@@ -66,7 +66,7 @@ public partial class MainWindow : Window
         Left = SystemParameters.VirtualScreenLeft;
         Top = SystemParameters.VirtualScreenTop;
         Width = SystemParameters.VirtualScreenWidth;
-        Height = SystemParameters.VirtualScreenHeight - 1;
+        Height = SystemParameters.VirtualScreenHeight;
     }
 
     private void OnRendering(object? sender, EventArgs e)
