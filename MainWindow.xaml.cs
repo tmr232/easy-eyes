@@ -61,12 +61,12 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        // Cover the work area (excludes the taskbar) so the taskbar remains visible.
-        var workArea = SystemParameters.WorkArea;
-        Left = workArea.Left;
-        Top = workArea.Top;
-        Width = workArea.Width;
-        Height = workArea.Height;
+        // Cover the virtual screen but leave 1px uncovered so Windows
+        // doesn't treat this as a fullscreen app and hide the taskbar.
+        Left = SystemParameters.VirtualScreenLeft;
+        Top = SystemParameters.VirtualScreenTop;
+        Width = SystemParameters.VirtualScreenWidth;
+        Height = SystemParameters.VirtualScreenHeight - 1;
     }
 
     private void OnRendering(object? sender, EventArgs e)

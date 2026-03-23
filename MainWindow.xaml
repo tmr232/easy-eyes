@@ -13,8 +13,8 @@
             <Rectangle.Fill>
                 <RadialGradientBrush>
                     <GradientStop Color="Transparent" Offset="0.0" />
-                    <GradientStop Color="#40000000" Offset="0.5" />
-                    <GradientStop Color="#80000000" Offset="1.0" />
+                    <GradientStop Color="#20000000" Offset="0.5" />
+                    <GradientStop Color="#40000000" Offset="1.0" />
                 </RadialGradientBrush>
             </Rectangle.Fill>
         </Rectangle>
