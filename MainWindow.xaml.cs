@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 using Forms = System.Windows.Forms;
 
 namespace EasyEyes;
@@ -14,19 +15,67 @@ public partial class MainWindow : Window
     private const int WS_EX_LAYERED = 0x00080000;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
 
+    private const double SpotlightRadius = 200;
+
     [DllImport("user32.dll")]
     private static extern int GetWindowLong(IntPtr hwnd, int index);
 
     [DllImport("user32.dll")]
     private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
     private Forms.NotifyIcon _trayIcon = null!;
+    private readonly RadialGradientBrush _spotlightMask;
 
     public MainWindow()
     {
+        _spotlightMask = new RadialGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            RadiusX = SpotlightRadius,
+            RadiusY = SpotlightRadius,
+            GradientStops =
+            {
+                new GradientStop(Colors.Transparent, 0.0),
+                new GradientStop(Colors.White, 1.0)
+            }
+        };
+
         InitializeComponent();
+        Overlay.OpacityMask = _spotlightMask;
+        Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
         InitializeTrayIcon();
+        CompositionTarget.Rendering += OnRendering;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        // Cover the work area (excludes the taskbar) so the taskbar remains visible.
+        var workArea = SystemParameters.WorkArea;
+        Left = workArea.Left;
+        Top = workArea.Top;
+        Width = workArea.Width;
+        Height = workArea.Height;
+    }
+
+    private void OnRendering(object? sender, EventArgs e)
+    {
+        if (!GetCursorPos(out var pt)) return;
+
+        var wpfPoint = PointFromScreen(new System.Windows.Point(pt.X, pt.Y));
+        _spotlightMask.Center = wpfPoint;
+        _spotlightMask.GradientOrigin = wpfPoint;
     }
 
     private void InitializeTrayIcon()
@@ -58,6 +107,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        CompositionTarget.Rendering -= OnRendering;
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
         base.OnClosed(e);

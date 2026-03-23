@@ -7,13 +7,13 @@
         Background="Transparent"
         Topmost="True"
         ShowInTaskbar="False"
-        WindowState="Maximized">
+        ResizeMode="NoResize">
     <Grid>
-        <!-- Radial gradient: transparent center, dark edges -->
-        <Rectangle>
+        <Rectangle x:Name="Overlay">
             <Rectangle.Fill>
                 <RadialGradientBrush>
                     <GradientStop Color="Transparent" Offset="0.0" />
+                    <GradientStop Color="#40000000" Offset="0.5" />
                     <GradientStop Color="#80000000" Offset="1.0" />
                 </RadialGradientBrush>
             </Rectangle.Fill>
