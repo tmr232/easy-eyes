@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using Microsoft.Toolkit.Uwp.Notifications;
 using Forms = System.Windows.Forms;
 
 namespace EasyEyes;
@@ -14,6 +15,11 @@ public partial class MainWindow : Window
     private const int WS_EX_TRANSPARENT = 0x00000020;
     private const int WS_EX_LAYERED = 0x00080000;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
+
+    private const int WM_WTSSESSION_CHANGE = 0x02B1;
+    private const int WTS_SESSION_LOCK = 0x7;
+    private const int WTS_SESSION_UNLOCK = 0x8;
+    private const int NOTIFY_FOR_THIS_SESSION = 0x0;
 
     private const double SpotlightRadius = 200;
 
@@ -26,6 +32,12 @@ public partial class MainWindow : Window
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [DllImport("wtsapi32.dll")]
+    private static extern bool WTSRegisterSessionNotification(IntPtr hWnd, int dwFlags);
+
+    [DllImport("wtsapi32.dll")]
+    private static extern bool WTSUnRegisterSessionNotification(IntPtr hWnd);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
@@ -101,12 +113,59 @@ public partial class MainWindow : Window
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
+
+        var source = HwndSource.FromHwnd(hwnd);
+        source?.AddHook(WndProc);
+        WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION);
+
         int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
         SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
     }
 
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_WTSSESSION_CHANGE)
+        {
+            var message = wParam.ToInt32() switch
+            {
+                WTS_SESSION_LOCK => "Session locked",
+                WTS_SESSION_UNLOCK => "Session unlocked",
+                _ => (string?)null
+            };
+
+            if (message != null)
+            {
+                ShowUrgentNotification(message);
+            }
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private static void ShowUrgentNotification(string message)
+    {
+        var xml = $"""
+            <toast scenario="urgent">
+              <visual>
+                <binding template="ToastGeneric">
+                  <text>Easy Eyes</text>
+                  <text>{message}</text>
+                </binding>
+              </visual>
+            </toast>
+            """;
+
+        var doc = new Windows.Data.Xml.Dom.XmlDocument();
+        doc.LoadXml(xml);
+
+        ToastNotificationManagerCompat.CreateToastNotifier()
+            .Show(new Windows.UI.Notifications.ToastNotification(doc));
+    }
+
     protected override void OnClosed(EventArgs e)
     {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        WTSUnRegisterSessionNotification(hwnd);
         CompositionTarget.Rendering -= OnRendering;
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
