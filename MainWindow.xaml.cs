@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using Microsoft.Toolkit.Uwp.Notifications;
 using Forms = System.Windows.Forms;
 
@@ -100,6 +101,7 @@ public partial class MainWindow : Window
         };
 
         var menu = new Forms.ContextMenuStrip();
+        menu.Items.Add("Animate", null, (_, _) => AnimateGradient());
         menu.Items.Add("Exit", null, (_, _) =>
         {
             _trayIcon.Visible = false;
@@ -108,6 +110,25 @@ public partial class MainWindow : Window
         });
 
         _trayIcon.ContextMenuStrip = menu;
+    }
+
+    private void AnimateGradient()
+    {
+        var fadeOut = new DoubleAnimation(1.0, 0.0, TimeSpan.FromSeconds(5));
+        var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromSeconds(5))
+        {
+            BeginTime = TimeSpan.FromSeconds(5)
+        };
+
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(fadeOut);
+        storyboard.Children.Add(fadeIn);
+        Storyboard.SetTarget(fadeOut, Overlay);
+        Storyboard.SetTarget(fadeIn, Overlay);
+        Storyboard.SetTargetProperty(fadeOut, new PropertyPath("Opacity"));
+        Storyboard.SetTargetProperty(fadeIn, new PropertyPath("Opacity"));
+
+        storyboard.Begin();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
