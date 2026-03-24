@@ -60,11 +60,13 @@ public class EasyEyesStateMachine
     {
         // Superstate: ScreenUnlocked
         _machine.Configure(State.ScreenUnlocked)
-            .Permit(Trigger.ScreenLock, State.L_TimerRunning);
+            .Permit(Trigger.ScreenLock, State.L_TimerRunning)
+            .Ignore(Trigger.ScreenUnlock);
 
         // Superstate: ScreenLocked
         _machine.Configure(State.ScreenLocked)
-            .Permit(Trigger.ScreenUnlock, State.T_TimerRunning);
+            .Permit(Trigger.ScreenUnlock, State.T_TimerRunning)
+            .Ignore(Trigger.ScreenLock);
 
         // ScreenUnlocked substates
         _machine.Configure(State.T_TimerRunning)

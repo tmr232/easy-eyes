@@ -73,7 +73,12 @@ public partial class MainWindow : Window
             showOverlay: DoShowOverlay,
             hideOverlay: DoHideOverlay,
             showToast: () => ShowUrgentNotification("Time to rest your eyes!"),
-            fireTrigger: trigger => stateMachine!.Fire(trigger));
+            fireTrigger: trigger =>
+            {
+                App.Log($"FireTrigger: {trigger}, CurrentState: {stateMachine!.CurrentState}");
+                stateMachine.Fire(trigger);
+                App.Log($"  -> NewState: {stateMachine.CurrentState}");
+            });
 
         stateMachine = new EasyEyesStateMachine(_actions);
         _stateMachine = stateMachine;
@@ -110,12 +115,14 @@ public partial class MainWindow : Window
 
     private void DoShowOverlay()
     {
+        App.Log("DoShowOverlay");
         var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromSeconds(5));
         Overlay.BeginAnimation(OpacityProperty, fadeIn);
     }
 
     private void DoHideOverlay()
     {
+        App.Log("DoHideOverlay");
         Overlay.BeginAnimation(OpacityProperty, null);
         Overlay.Opacity = 0;
     }
@@ -156,7 +163,10 @@ public partial class MainWindow : Window
     {
         if (msg == WM_WTSSESSION_CHANGE)
         {
-            switch (wParam.ToInt32())
+            var sessionEvent = wParam.ToInt32();
+            App.Log($"WM_WTSSESSION_CHANGE wParam=0x{sessionEvent:X}, State={_stateMachine.CurrentState}");
+
+            switch (sessionEvent)
             {
                 case WTS_SESSION_LOCK:
                     _stateMachine.Fire(Trigger.ScreenLock);
@@ -172,26 +182,42 @@ public partial class MainWindow : Window
 
     private static void ShowUrgentNotification(string message)
     {
-        var xml = $"""
-            <toast scenario="urgent">
-              <visual>
-                <binding template="ToastGeneric">
-                  <text>Easy Eyes</text>
-                  <text>{message}</text>
-                </binding>
-              </visual>
-            </toast>
-            """;
+        try
+        {
+            var xml = $"""
+                <toast scenario="urgent">
+                  <visual>
+                    <binding template="ToastGeneric">
+                      <text>Easy Eyes</text>
+                      <text>{message}</text>
+                    </binding>
+                  </visual>
+                </toast>
+                """;
 
-        var doc = new Windows.Data.Xml.Dom.XmlDocument();
-        doc.LoadXml(xml);
+            var doc = new Windows.Data.Xml.Dom.XmlDocument();
+            doc.LoadXml(xml);
 
-        ToastNotificationManagerCompat.CreateToastNotifier()
-            .Show(new Windows.UI.Notifications.ToastNotification(doc));
+            ToastNotificationManagerCompat.CreateToastNotifier()
+                .Show(new Windows.UI.Notifications.ToastNotification(doc));
+        }
+        catch
+        {
+            // Toast delivery can fail when the session is locked or
+            // the notification platform is unavailable — swallow so
+            // it doesn't crash the app.
+        }
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        App.Log($"MainWindow OnClosing, State={_stateMachine.CurrentState}");
+        base.OnClosing(e);
     }
 
     protected override void OnClosed(EventArgs e)
     {
+        App.Log($"MainWindow OnClosed, State={_stateMachine.CurrentState}");
         var hwnd = new WindowInteropHelper(this).Handle;
         WTSUnRegisterSessionNotification(hwnd);
         CompositionTarget.Rendering -= OnRendering;

@@ -272,6 +272,31 @@ public class EasyEyesStateMachineTests
     }
 
     [Fact]
+    public void DuplicateScreenLock_IsIgnored()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenLock);
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.ScreenLock); // duplicate — should be ignored
+
+        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Empty(_actions.Calls);
+    }
+
+    [Fact]
+    public void DuplicateScreenUnlock_IsIgnored()
+    {
+        var sm = CreateMachine();
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.ScreenUnlock); // already unlocked — should be ignored
+
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Empty(_actions.Calls);
+    }
+
+    [Fact]
     public void QuickLockUnlock_WithoutOverlay_StaysNotDisplayed()
     {
         var sm = CreateMachine();
