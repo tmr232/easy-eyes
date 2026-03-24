@@ -9,6 +9,7 @@ public class EasyEyesActions : IEasyEyesActions
     private readonly Action _showOverlay;
     private readonly Action _hideOverlay;
     private readonly Action _showToast;
+    private readonly Action _clearToast;
 
     private TimeSpan _tRemaining;
     private readonly TimeSpan _tDuration;
@@ -21,6 +22,7 @@ public class EasyEyesActions : IEasyEyesActions
         Action showOverlay,
         Action hideOverlay,
         Action showToast,
+        Action clearToast,
         Action<Trigger> fireTrigger)
     {
         _tDuration = tDuration;
@@ -29,6 +31,7 @@ public class EasyEyesActions : IEasyEyesActions
         _showOverlay = showOverlay;
         _hideOverlay = hideOverlay;
         _showToast = showToast;
+        _clearToast = clearToast;
 
         _tTimer = new DispatcherTimer();
         _tTimer.Tick += (_, _) =>
@@ -48,6 +51,7 @@ public class EasyEyesActions : IEasyEyesActions
     public void ShowOverlay() => _showOverlay();
     public void HideOverlay() => _hideOverlay();
     public void ShowToast() => _showToast();
+    public void ClearToast() => _clearToast();
 
     public void SuspendTTimer()
     {

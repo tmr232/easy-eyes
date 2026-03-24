@@ -68,11 +68,12 @@ public partial class MainWindow : Window
 
         EasyEyesStateMachine? stateMachine = null;
         _actions = new EasyEyesActions(
-            tDuration: TimeSpan.FromSeconds(20),
-            lDuration: TimeSpan.FromSeconds(20),
+            tDuration: TimeSpan.FromSeconds(2),
+            lDuration: TimeSpan.FromSeconds(2),
             showOverlay: DoShowOverlay,
             hideOverlay: DoHideOverlay,
             showToast: () => ShowUrgentNotification("Time to rest your eyes!"),
+            clearToast: ClearNotifications,
             fireTrigger: trigger =>
             {
                 App.Log($"FireTrigger: {trigger}, CurrentState: {stateMachine!.CurrentState}");
@@ -206,6 +207,18 @@ public partial class MainWindow : Window
             // Toast delivery can fail when the session is locked or
             // the notification platform is unavailable — swallow so
             // it doesn't crash the app.
+        }
+    }
+
+    private static void ClearNotifications()
+    {
+        try
+        {
+            ToastNotificationManagerCompat.History.Clear();
+        }
+        catch
+        {
+            // Best-effort — notification platform may be unavailable.
         }
     }
 

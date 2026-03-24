@@ -9,6 +9,7 @@ public class MockActions : IEasyEyesActions
     public void ShowOverlay() => Calls.Add(nameof(ShowOverlay));
     public void HideOverlay() => Calls.Add(nameof(HideOverlay));
     public void ShowToast() => Calls.Add(nameof(ShowToast));
+    public void ClearToast() => Calls.Add(nameof(ClearToast));
     public void SuspendTTimer() => Calls.Add(nameof(SuspendTTimer));
     public void ResumeTTimer() => Calls.Add(nameof(ResumeTTimer));
     public void ResetTTimer() => Calls.Add(nameof(ResetTTimer));
@@ -113,7 +114,7 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.ScreenUnlock);
 
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.ResumeTTimer), nameof(IEasyEyesActions.StopLTimer) },
+            new[] { nameof(IEasyEyesActions.ResumeTTimer), nameof(IEasyEyesActions.StopLTimer), nameof(IEasyEyesActions.ClearToast) },
             _actions.Calls.ToArray()
         );
     }

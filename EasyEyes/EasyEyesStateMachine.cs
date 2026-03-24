@@ -31,6 +31,7 @@ public interface IEasyEyesActions
     void ShowOverlay();
     void HideOverlay();
     void ShowToast();
+    void ClearToast();
     void SuspendTTimer();
     void ResumeTTimer();
     void ResetTTimer();
@@ -117,6 +118,7 @@ public class EasyEyesStateMachine
             {
                 _actions.ResumeTTimer();
                 _actions.StopLTimer();
+                _actions.ClearToast();
             });
     }
 
