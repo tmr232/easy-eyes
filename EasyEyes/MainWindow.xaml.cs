@@ -49,6 +49,8 @@ public partial class MainWindow : Window
 
     private Forms.NotifyIcon _trayIcon = null!;
     private readonly RadialGradientBrush _spotlightMask;
+    private readonly EasyEyesStateMachine _stateMachine;
+    private readonly EasyEyesActions _actions;
 
     public MainWindow()
     {
@@ -64,8 +66,21 @@ public partial class MainWindow : Window
             }
         };
 
+        EasyEyesStateMachine? stateMachine = null;
+        _actions = new EasyEyesActions(
+            tDuration: TimeSpan.FromSeconds(20),
+            lDuration: TimeSpan.FromSeconds(20),
+            showOverlay: DoShowOverlay,
+            hideOverlay: DoHideOverlay,
+            showToast: () => ShowUrgentNotification("Time to rest your eyes!"),
+            fireTrigger: trigger => stateMachine!.Fire(trigger));
+
+        stateMachine = new EasyEyesStateMachine(_actions);
+        _stateMachine = stateMachine;
+
         InitializeComponent();
         Overlay.OpacityMask = _spotlightMask;
+        Overlay.Opacity = 0;
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
         InitializeTrayIcon();
@@ -79,7 +94,9 @@ public partial class MainWindow : Window
         Left = SystemParameters.VirtualScreenLeft;
         Top = SystemParameters.VirtualScreenTop;
         Width = SystemParameters.VirtualScreenWidth;
-        Height = SystemParameters.VirtualScreenHeight;
+        Height = SystemParameters.VirtualScreenHeight - 1;
+
+        _actions.StartTTimer();
     }
 
     private void OnRendering(object? sender, EventArgs e)
@@ -89,6 +106,18 @@ public partial class MainWindow : Window
         var wpfPoint = PointFromScreen(new System.Windows.Point(pt.X, pt.Y));
         _spotlightMask.Center = wpfPoint;
         _spotlightMask.GradientOrigin = wpfPoint;
+    }
+
+    private void DoShowOverlay()
+    {
+        var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromSeconds(5));
+        Overlay.BeginAnimation(OpacityProperty, fadeIn);
+    }
+
+    private void DoHideOverlay()
+    {
+        Overlay.BeginAnimation(OpacityProperty, null);
+        Overlay.Opacity = 0;
     }
 
     private void InitializeTrayIcon()
@@ -101,7 +130,6 @@ public partial class MainWindow : Window
         };
 
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add("Animate", null, (_, _) => AnimateGradient());
         menu.Items.Add("Exit", null, (_, _) =>
         {
             _trayIcon.Visible = false;
@@ -110,25 +138,6 @@ public partial class MainWindow : Window
         });
 
         _trayIcon.ContextMenuStrip = menu;
-    }
-
-    private void AnimateGradient()
-    {
-        var fadeOut = new DoubleAnimation(1.0, 0.0, TimeSpan.FromSeconds(5));
-        var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromSeconds(5))
-        {
-            BeginTime = TimeSpan.FromSeconds(5)
-        };
-
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(fadeOut);
-        storyboard.Children.Add(fadeIn);
-        Storyboard.SetTarget(fadeOut, Overlay);
-        Storyboard.SetTarget(fadeIn, Overlay);
-        Storyboard.SetTargetProperty(fadeOut, new PropertyPath("Opacity"));
-        Storyboard.SetTargetProperty(fadeIn, new PropertyPath("Opacity"));
-
-        storyboard.Begin();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -147,16 +156,14 @@ public partial class MainWindow : Window
     {
         if (msg == WM_WTSSESSION_CHANGE)
         {
-            var message = wParam.ToInt32() switch
+            switch (wParam.ToInt32())
             {
-                WTS_SESSION_LOCK => "Session locked",
-                WTS_SESSION_UNLOCK => "Session unlocked",
-                _ => (string?)null
-            };
-
-            if (message != null)
-            {
-                ShowUrgentNotification(message);
+                case WTS_SESSION_LOCK:
+                    _stateMachine.Fire(Trigger.ScreenLock);
+                    break;
+                case WTS_SESSION_UNLOCK:
+                    _stateMachine.Fire(Trigger.ScreenUnlock);
+                    break;
             }
         }
 
