@@ -7,8 +7,19 @@ repos:
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+        exclude: 'packages\.lock\.json$'
       - id: check-yaml
       - id: check-added-large-files
+
+  # NuGet lock file verification
+  - repo: local
+    hooks:
+      - id: nuget-lock-files
+        name: Verify NuGet lock files are up to date
+        entry: dotnet restore --force-evaluate
+        language: system
+        files: '(\.csproj|packages\.lock\.json|Directory\.Build\.props)$'
+        pass_filenames: false
 
   # Ad-blocker - block LLM co-author trailers
   - repo: https://github.com/tmr232/precommit-ad-blocker
