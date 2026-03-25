@@ -37,7 +37,12 @@ trim_trailing_whitespace = false
 # C# files
 [*.cs]
 
+
+
 #### .NET Analyzer Suppressions ####
+
+# MA0026: TODO comments
+dotnet_diagnostic.MA0026.severity = none
 
 # CA1707: Identifiers should not contain underscores — enum members use underscores for domain clarity
 dotnet_diagnostic.CA1707.severity = none

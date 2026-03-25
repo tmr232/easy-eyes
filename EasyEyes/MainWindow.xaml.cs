@@ -140,6 +140,7 @@ public partial class MainWindow : Window
     {
         _trayIcon = new Forms.NotifyIcon
         {
+            //TODO: Make sure we can get this from our resources in a single-binary release
             Icon = new System.Drawing.Icon(System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "tray.ico")),
             Text = "Easy Eyes",
             Visible = true
