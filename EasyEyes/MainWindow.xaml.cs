@@ -260,7 +260,7 @@ public partial class MainWindow : Window
         WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION);
 
         int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
+        _ = SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
