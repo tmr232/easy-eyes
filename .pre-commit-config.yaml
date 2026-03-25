@@ -11,6 +11,16 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
 
+  # dotnet format - C# formatting and style
+  - repo: local
+    hooks:
+      - id: dotnet-format
+        name: dotnet format
+        entry: dotnet format --verbosity quiet --no-restore
+        language: system
+        types_or: [c#]
+        pass_filenames: false
+
   # NuGet lock file verification
   - repo: local
     hooks:
