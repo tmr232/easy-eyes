@@ -45,6 +45,12 @@ dotnet_diagnostic.CA1707.severity = none
 # CA1001: Types that own disposable fields should be disposable — WPF Window lifecycle handles disposal
 dotnet_diagnostic.CA1001.severity = none
 
+# MA0048: File name must match type name — related types (enums, interfaces) are kept together intentionally
+dotnet_diagnostic.MA0048.severity = none
+
+# MA0051: Method is too long — state machine configuration is inherently one logical unit
+dotnet_diagnostic.MA0051.severity = none
+
 #### .NET Coding Conventions ####
 
 # Organize usings
@@ -200,3 +206,9 @@ dotnet_naming_style.begins_with_i.required_prefix = I
 dotnet_naming_style.begins_with_i.capitalization = pascal_case
 
 dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+# Test projects
+[{*Tests/**/*.cs,*.Tests/**}]
+
+# MA0016: Prefer collection abstraction — test helpers use concrete types for convenience
+dotnet_diagnostic.MA0016.severity = none

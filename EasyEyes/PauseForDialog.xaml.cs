@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Input;
@@ -17,12 +18,12 @@ public partial class PauseForDialog : Window
 
     private void MinutesBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        e.Handled = !Regex.IsMatch(e.Text, @"^\d+$");
+        e.Handled = !Regex.IsMatch(e.Text, @"^\d+$", RegexOptions.NonBacktracking);
     }
 
     private void Ok_Click(object sender, RoutedEventArgs e)
     {
-        if (int.TryParse(MinutesBox.Text, out var minutes) && minutes > 0)
+        if (int.TryParse(MinutesBox.Text, CultureInfo.InvariantCulture, out var minutes) && minutes > 0)
         {
             Minutes = minutes;
             DialogResult = true;
