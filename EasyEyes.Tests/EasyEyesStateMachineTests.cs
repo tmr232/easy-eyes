@@ -15,6 +15,8 @@ public class MockActions : IEasyEyesActions
     public void ResetTTimer() => Calls.Add(nameof(ResetTTimer));
     public void RestartLTimer() => Calls.Add(nameof(RestartLTimer));
     public void StopLTimer() => Calls.Add(nameof(StopLTimer));
+    public void StartSnoozeTimer(TimeSpan duration) => Calls.Add(nameof(StartSnoozeTimer));
+    public void StopSnoozeTimer() => Calls.Add(nameof(StopSnoozeTimer));
 }
 
 public class EasyEyesStateMachineTests
@@ -309,5 +311,501 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.LTimerExpired);
 
         Assert.Equal(State.Idle, sm.CurrentState);
+    }
+
+    // --- Pause / Resume ---
+
+    [Fact]
+    public void Pause_FromT_TimerRunning_TransitionsTo_Paused()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.Pause);
+
+        Assert.Equal(State.Paused, sm.CurrentState);
+    }
+
+    [Fact]
+    public void Pause_EntryActions()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.Pause);
+
+        Assert.Equal(
+            new[] { nameof(IEasyEyesActions.SuspendTTimer), nameof(IEasyEyesActions.HideOverlay) },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void Pause_FromOverlayDisplayed_TransitionsTo_Paused()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.Pause);
+
+        Assert.Equal(State.Paused, sm.CurrentState);
+        Assert.Equal(
+            new[] { nameof(IEasyEyesActions.SuspendTTimer), nameof(IEasyEyesActions.HideOverlay) },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void Resume_FromPaused_TransitionsTo_T_TimerRunning()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.Pause);
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.Resume);
+
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(
+            new[] { nameof(IEasyEyesActions.ResetTTimer), nameof(IEasyEyesActions.ResumeTTimer) },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void Paused_IgnoresAllTriggers()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.Pause);
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.ScreenUnlock);
+        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.LTimerExpired);
+
+        Assert.Equal(State.Paused, sm.CurrentState);
+        Assert.Empty(_actions.Calls);
+    }
+
+    [Fact]
+    public void Pause_ResetsOverlayFlag()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);  // overlay displayed, flag = true
+        sm.Fire(Trigger.Pause);          // should reset flag
+        sm.Fire(Trigger.Resume);         // → T_TimerRunning
+
+        // Lock + L expires → should go to Idle (not Toast) because flag was cleared
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.LTimerExpired);
+
+        Assert.Equal(State.Idle, sm.CurrentState);
+    }
+
+    [Fact]
+    public void FullCycle_Pause_Resume_TExpiresAgain()
+    {
+        var sm = CreateMachine();
+
+        sm.Fire(Trigger.Pause);
+        Assert.Equal(State.Paused, sm.CurrentState);
+
+        sm.Fire(Trigger.Resume);
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+
+        sm.Fire(Trigger.TTimerExpired);
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+    }
+
+    // --- PauseUntilUnlock ---
+
+    [Fact]
+    public void PauseUntilUnlock_FromT_TimerRunning_TransitionsTo_PausedUntilUnlock()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.PauseUntilUnlock);
+
+        Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
+    }
+
+    [Fact]
+    public void PauseUntilUnlock_EntryActions()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.PauseUntilUnlock);
+
+        Assert.Equal(
+            new[] { nameof(IEasyEyesActions.SuspendTTimer), nameof(IEasyEyesActions.HideOverlay) },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void PauseUntilUnlock_FromOverlayDisplayed()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.PauseUntilUnlock);
+
+        Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
+        Assert.Equal(
+            new[] { nameof(IEasyEyesActions.SuspendTTimer), nameof(IEasyEyesActions.HideOverlay) },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void PausedUntilUnlock_ScreenUnlock_ResumesTo_T_TimerRunning()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.PauseUntilUnlock);
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.ScreenUnlock);
+
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        // OnExit resets T, then OnEntryFrom(ScreenUnlock) resumes T
+        Assert.Equal(
+            new[]
+            {
+                nameof(IEasyEyesActions.ResetTTimer),
+                nameof(IEasyEyesActions.ResumeTTimer),
+                nameof(IEasyEyesActions.StopLTimer),
+                nameof(IEasyEyesActions.ClearToast),
+            },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void PausedUntilUnlock_Resume_ManualToggle()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.PauseUntilUnlock);
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.Resume);
+
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        // OnExit resets T, then OnEntryFrom(Resume) also resets + resumes
+        Assert.Contains(nameof(IEasyEyesActions.ResetTTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
+    }
+
+    [Fact]
+    public void PausedUntilUnlock_IgnoresAllIrrelevantTriggers()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.PauseUntilUnlock);
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.LTimerExpired);
+
+        Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
+        Assert.Empty(_actions.Calls);
+    }
+
+    [Fact]
+    public void PauseUntilUnlock_ResetsOverlayFlag()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);      // overlay displayed, flag = true
+        sm.Fire(Trigger.PauseUntilUnlock);   // should reset flag
+        sm.Fire(Trigger.ScreenUnlock);       // → T_TimerRunning
+
+        // Lock + L expires → should go to Idle (not Toast)
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.LTimerExpired);
+
+        Assert.Equal(State.Idle, sm.CurrentState);
+    }
+
+    [Fact]
+    public void FullCycle_PauseUntilUnlock_Lock_Unlock_TExpiresAgain()
+    {
+        var sm = CreateMachine();
+
+        sm.Fire(Trigger.PauseUntilUnlock);
+        Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
+
+        // Lock is ignored while in PausedUntilUnlock
+        sm.Fire(Trigger.ScreenLock);
+        Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
+
+        // Unlock auto-resumes
+        sm.Fire(Trigger.ScreenUnlock);
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+
+        sm.Fire(Trigger.TTimerExpired);
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+    }
+
+    // --- PauseForDuration (PausedTimed) ---
+
+    [Fact]
+    public void PauseForDuration_FromT_TimerRunning_TransitionsTo_PausedTimed()
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+
+        Assert.Equal(State.PausedTimed, sm.CurrentState);
+    }
+
+    [Fact]
+    public void PauseForDuration_EntryActions()
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+
+        Assert.Equal(
+            new[]
+            {
+                nameof(IEasyEyesActions.SuspendTTimer),
+                nameof(IEasyEyesActions.HideOverlay),
+                nameof(IEasyEyesActions.StartSnoozeTimer),
+            },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void PauseForDuration_FromOverlayDisplayed()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);
+        _actions.Calls.Clear();
+
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(10));
+
+        Assert.Equal(State.PausedTimed, sm.CurrentState);
+        Assert.Equal(
+            new[]
+            {
+                nameof(IEasyEyesActions.SuspendTTimer),
+                nameof(IEasyEyesActions.HideOverlay),
+                nameof(IEasyEyesActions.StartSnoozeTimer),
+            },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void SnoozeExpired_Actions()
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.SnoozeExpired);
+
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        // OnExit stops snooze, then OnEntryFrom(SnoozeExpired) resets + resumes T
+        Assert.Equal(
+            new[]
+            {
+                nameof(IEasyEyesActions.StopSnoozeTimer),
+                nameof(IEasyEyesActions.ResetTTimer),
+                nameof(IEasyEyesActions.ResumeTTimer),
+            },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void PausedTimed_Resume_Actions()
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.Resume);
+
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        // OnExit stops snooze, then OnEntryFrom(Resume) resets + resumes T
+        Assert.Equal(
+            new[]
+            {
+                nameof(IEasyEyesActions.StopSnoozeTimer),
+                nameof(IEasyEyesActions.ResetTTimer),
+                nameof(IEasyEyesActions.ResumeTTimer),
+            },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void PausedTimed_IgnoresAllIrrelevantTriggers()
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.ScreenUnlock);
+        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.LTimerExpired);
+
+        Assert.Equal(State.PausedTimed, sm.CurrentState);
+        Assert.Empty(_actions.Calls);
+    }
+
+    [Fact]
+    public void PauseForDuration_ResetsOverlayFlag()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);            // overlay displayed, flag = true
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(5)); // should reset flag
+        sm.Fire(Trigger.SnoozeExpired);            // → T_TimerRunning
+
+        // Lock + L expires → should go to Idle (not Toast)
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.LTimerExpired);
+
+        Assert.Equal(State.Idle, sm.CurrentState);
+    }
+
+    [Fact]
+    public void FullCycle_PauseForDuration_SnoozeExpires_TExpiresAgain()
+    {
+        var sm = CreateMachine();
+
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+        Assert.Equal(State.PausedTimed, sm.CurrentState);
+
+        sm.Fire(Trigger.SnoozeExpired);
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+
+        sm.Fire(Trigger.TTimerExpired);
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+    }
+
+    [Fact]
+    public void FullCycle_PauseForDuration_ManualResume_TExpiresAgain()
+    {
+        var sm = CreateMachine();
+
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+        Assert.Equal(State.PausedTimed, sm.CurrentState);
+
+        sm.Fire(Trigger.Resume);
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+
+        sm.Fire(Trigger.TTimerExpired);
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+    }
+
+    // --- Invalid transitions (should throw) ---
+
+    // From T_TimerRunning: unhandled triggers
+    [Theory]
+    [InlineData(Trigger.LTimerExpired)]
+    [InlineData(Trigger.Resume)]
+    [InlineData(Trigger.SnoozeExpired)]
+    public void T_TimerRunning_InvalidTrigger_Throws(Trigger trigger)
+    {
+        var sm = CreateMachine();
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+
+        Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
+    }
+
+    // From OverlayDisplayed: TTimerExpired again is unhandled
+    [Theory]
+    [InlineData(Trigger.TTimerExpired)]
+    [InlineData(Trigger.LTimerExpired)]
+    [InlineData(Trigger.Resume)]
+    [InlineData(Trigger.SnoozeExpired)]
+    public void OverlayDisplayed_InvalidTrigger_Throws(Trigger trigger)
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+
+        Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
+    }
+
+    // From L_TimerRunning: unhandled triggers
+    [Theory]
+    [InlineData(Trigger.TTimerExpired)]
+    [InlineData(Trigger.Pause)]
+    [InlineData(Trigger.PauseUntilUnlock)]
+    [InlineData(Trigger.Resume)]
+    [InlineData(Trigger.SnoozeExpired)]
+    public void L_TimerRunning_InvalidTrigger_Throws(Trigger trigger)
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenLock);
+        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+
+        Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
+    }
+
+    // From ToastDisplayed: unhandled triggers
+    [Theory]
+    [InlineData(Trigger.TTimerExpired)]
+    [InlineData(Trigger.LTimerExpired)]
+    [InlineData(Trigger.Pause)]
+    [InlineData(Trigger.PauseUntilUnlock)]
+    [InlineData(Trigger.Resume)]
+    [InlineData(Trigger.SnoozeExpired)]
+    public void ToastDisplayed_InvalidTrigger_Throws(Trigger trigger)
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired); // → OverlayDisplayed
+        sm.Fire(Trigger.ScreenLock);    // → L_TimerRunning
+        sm.Fire(Trigger.LTimerExpired); // → ToastDisplayed
+        Assert.Equal(State.ToastDisplayed, sm.CurrentState);
+
+        Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
+    }
+
+    // From Idle: unhandled triggers
+    [Theory]
+    [InlineData(Trigger.TTimerExpired)]
+    [InlineData(Trigger.LTimerExpired)]
+    [InlineData(Trigger.Pause)]
+    [InlineData(Trigger.PauseUntilUnlock)]
+    [InlineData(Trigger.Resume)]
+    [InlineData(Trigger.SnoozeExpired)]
+    public void Idle_InvalidTrigger_Throws(Trigger trigger)
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenLock);    // → L_TimerRunning
+        sm.Fire(Trigger.LTimerExpired); // → Idle
+        Assert.Equal(State.Idle, sm.CurrentState);
+
+        Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
+    }
+
+    // From Paused: unhandled triggers
+    [Theory]
+    [InlineData(Trigger.Pause)]
+    [InlineData(Trigger.PauseUntilUnlock)]
+    [InlineData(Trigger.SnoozeExpired)]
+    public void Paused_InvalidTrigger_Throws(Trigger trigger)
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.Pause);
+        Assert.Equal(State.Paused, sm.CurrentState);
+
+        Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
+    }
+
+    // From PausedUntilUnlock: unhandled triggers
+    [Theory]
+    [InlineData(Trigger.Pause)]
+    [InlineData(Trigger.PauseUntilUnlock)]
+    [InlineData(Trigger.SnoozeExpired)]
+    public void PausedUntilUnlock_InvalidTrigger_Throws(Trigger trigger)
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.PauseUntilUnlock);
+        Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
+
+        Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
+    }
+
+    // From PausedTimed: unhandled triggers
+    [Theory]
+    [InlineData(Trigger.Pause)]
+    [InlineData(Trigger.PauseUntilUnlock)]
+    public void PausedTimed_InvalidTrigger_Throws(Trigger trigger)
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+        Assert.Equal(State.PausedTimed, sm.CurrentState);
+
+        Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
     }
 }
