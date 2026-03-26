@@ -27,6 +27,8 @@ public enum Trigger
 {
     ScreenLock,
     ScreenUnlock,
+    ScreenSleep,
+    ScreenWake,
     TTimerExpired,
     LTimerExpired,
     Pause,
@@ -57,6 +59,7 @@ public class EasyEyesStateMachine
     private readonly StateMachine<State, Trigger>.TriggerWithParameters<TimeSpan> _pauseForDurationTrigger;
     private readonly IEasyEyesActions _actions;
     private bool _wasOverlayDisplayed;
+    private bool _wasScreenSleep;
 
     public State CurrentState => _machine.State;
 
@@ -76,15 +79,19 @@ public class EasyEyesStateMachine
         // Superstate: ScreenUnlocked
         _machine.Configure(State.ScreenUnlocked)
             .Permit(Trigger.ScreenLock, State.L_TimerRunning)
+            .Permit(Trigger.ScreenSleep, State.L_TimerRunning)
             .Permit(Trigger.Pause, State.Paused)
             .Permit(Trigger.PauseUntilUnlock, State.PausedUntilUnlock)
             .Permit(Trigger.PauseForDuration, State.PausedTimed)
-            .Ignore(Trigger.ScreenUnlock);
+            .Ignore(Trigger.ScreenUnlock)
+            .Ignore(Trigger.ScreenWake);
 
         // Superstate: ScreenLocked
         _machine.Configure(State.ScreenLocked)
             .Permit(Trigger.ScreenUnlock, State.T_TimerRunning)
-            .Ignore(Trigger.ScreenLock);
+            .Permit(Trigger.ScreenWake, State.T_TimerRunning)
+            .Ignore(Trigger.ScreenLock)
+            .Ignore(Trigger.ScreenSleep);
 
         // ScreenUnlocked substates
         _machine.Configure(State.T_TimerRunning)
@@ -104,11 +111,19 @@ public class EasyEyesStateMachine
             .SubstateOf(State.ScreenLocked)
             .OnEntryFrom(Trigger.ScreenLock, () =>
             {
+                _wasScreenSleep = false;
                 _actions.SuspendTTimer();
                 _actions.RestartLTimer();
             })
-            .PermitIf(Trigger.LTimerExpired, State.ToastDisplayed, () => _wasOverlayDisplayed)
-            .PermitIf(Trigger.LTimerExpired, State.Idle, () => !_wasOverlayDisplayed);
+            .OnEntryFrom(Trigger.ScreenSleep, () =>
+            {
+                _wasScreenSleep = true;
+                _actions.SuspendTTimer();
+                _actions.RestartLTimer();
+                _actions.HideOverlay();
+            })
+            .PermitIf(Trigger.LTimerExpired, State.ToastDisplayed, () => _wasOverlayDisplayed && !_wasScreenSleep)
+            .PermitIf(Trigger.LTimerExpired, State.Idle, () => !_wasOverlayDisplayed || _wasScreenSleep);
 
         _machine.Configure(State.ToastDisplayed)
             .SubstateOf(State.ScreenLocked)
@@ -137,6 +152,12 @@ public class EasyEyesStateMachine
                 _actions.StopLTimer();
                 _actions.ClearToast();
             })
+            .OnEntryFrom(Trigger.ScreenWake, () =>
+            {
+                _actions.ResumeTTimer();
+                _actions.StopLTimer();
+                _actions.ClearToast();
+            })
             .OnEntryFrom(Trigger.Resume, () =>
             {
                 _actions.ResetTTimer();
@@ -159,6 +180,8 @@ public class EasyEyesStateMachine
             .Permit(Trigger.Resume, State.T_TimerRunning)
             .Ignore(Trigger.ScreenLock)
             .Ignore(Trigger.ScreenUnlock)
+            .Ignore(Trigger.ScreenSleep)
+            .Ignore(Trigger.ScreenWake)
             .Ignore(Trigger.TTimerExpired)
             .Ignore(Trigger.LTimerExpired);
 
@@ -176,6 +199,8 @@ public class EasyEyesStateMachine
             .Permit(Trigger.ScreenUnlock, State.T_TimerRunning)
             .Permit(Trigger.Resume, State.T_TimerRunning)
             .Ignore(Trigger.ScreenLock)
+            .Ignore(Trigger.ScreenSleep)
+            .Ignore(Trigger.ScreenWake)
             .Ignore(Trigger.TTimerExpired)
             .Ignore(Trigger.LTimerExpired);
 
@@ -195,6 +220,8 @@ public class EasyEyesStateMachine
             .Permit(Trigger.Resume, State.T_TimerRunning)
             .Ignore(Trigger.ScreenLock)
             .Ignore(Trigger.ScreenUnlock)
+            .Ignore(Trigger.ScreenSleep)
+            .Ignore(Trigger.ScreenWake)
             .Ignore(Trigger.TTimerExpired)
             .Ignore(Trigger.LTimerExpired);
     }

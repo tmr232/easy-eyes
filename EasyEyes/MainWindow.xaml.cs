@@ -260,6 +260,16 @@ public partial class MainWindow : Window
             App.Log($"SessionUnlocked, State={_stateMachine.CurrentState}");
             _stateMachine.Fire(Trigger.ScreenUnlock);
         };
+        _sessionListener.DisplayOff += (_, _) =>
+        {
+            App.Log($"DisplayOff, State={_stateMachine.CurrentState}");
+            _stateMachine.Fire(Trigger.ScreenSleep);
+        };
+        _sessionListener.DisplayOn += (_, _) =>
+        {
+            App.Log($"DisplayOn, State={_stateMachine.CurrentState}");
+            _stateMachine.Fire(Trigger.ScreenWake);
+        };
 
         int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
         _ = SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);

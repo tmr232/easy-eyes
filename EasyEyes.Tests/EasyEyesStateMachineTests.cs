@@ -685,6 +685,188 @@ public class EasyEyesStateMachineTests
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
     }
 
+    // --- Screen Sleep ---
+
+    [Fact]
+    public void ScreenSleep_FromT_TimerRunning_TransitionsTo_L_TimerRunning()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenSleep);
+
+        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.True(sm.IsInState(State.ScreenLocked));
+    }
+
+    [Fact]
+    public void ScreenSleep_SuspendsT_RestartsL_HidesOverlay()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenSleep);
+
+        Assert.Equal(
+            new[] { nameof(IEasyEyesActions.SuspendTTimer), nameof(IEasyEyesActions.RestartLTimer), nameof(IEasyEyesActions.HideOverlay) },
+            _actions.Calls.ToArray()
+        );
+    }
+
+    [Fact]
+    public void ScreenSleep_FromOverlayDisplayed_TransitionsTo_L_TimerRunning()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired); // → OverlayDisplayed
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.ScreenSleep);
+
+        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.True(sm.IsInState(State.ScreenLocked));
+    }
+
+    [Fact]
+    public void ScreenSleep_FromOverlayDisplayed_NeverShowsToast()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired); // overlay displayed, _wasOverlayDisplayed = true
+        sm.Fire(Trigger.ScreenSleep);
+
+        sm.Fire(Trigger.LTimerExpired);
+
+        Assert.Equal(State.Idle, sm.CurrentState);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+    }
+
+    [Fact]
+    public void ScreenSleep_IgnoredInScreenLocked()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.ScreenSleep);
+
+        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+    }
+
+    [Fact]
+    public void ScreenSleep_IgnoredInPaused()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.Pause);
+        sm.Fire(Trigger.ScreenSleep);
+        Assert.Equal(State.Paused, sm.CurrentState);
+    }
+
+    [Fact]
+    public void ScreenSleep_IgnoredInPausedUntilUnlock()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.PauseUntilUnlock);
+        sm.Fire(Trigger.ScreenSleep);
+        Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
+    }
+
+    [Fact]
+    public void ScreenSleep_IgnoredInPausedTimed()
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+        sm.Fire(Trigger.ScreenSleep);
+        Assert.Equal(State.PausedTimed, sm.CurrentState);
+    }
+
+    // --- Screen Wake ---
+
+    [Fact]
+    public void ScreenWake_FromL_TimerRunning_TransitionsTo_T_TimerRunning()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenSleep);
+        sm.Fire(Trigger.ScreenWake);
+
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.True(sm.IsInState(State.ScreenUnlocked));
+    }
+
+    [Fact]
+    public void ScreenWake_ResumesT_StopsL_ClearsToast()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenSleep);
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.ScreenWake);
+
+        Assert.Equal(
+            new[] { nameof(IEasyEyesActions.ResumeTTimer), nameof(IEasyEyesActions.StopLTimer), nameof(IEasyEyesActions.ClearToast) },
+            _actions.Calls.ToArray()
+        );
+    }
+
+    [Fact]
+    public void ScreenWake_FromIdle_TransitionsTo_T_TimerRunning()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenSleep);
+        sm.Fire(Trigger.LTimerExpired); // → Idle
+
+        sm.Fire(Trigger.ScreenWake);
+
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+    }
+
+    [Fact]
+    public void ScreenWake_IgnoredInScreenUnlocked()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenWake);
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+    }
+
+    [Fact]
+    public void ScreenWake_IgnoredInPaused()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.Pause);
+        sm.Fire(Trigger.ScreenWake);
+        Assert.Equal(State.Paused, sm.CurrentState);
+    }
+
+    [Fact]
+    public void ScreenWake_IgnoredInPausedUntilUnlock()
+    {
+        var sm = CreateMachine();
+        sm.Fire(Trigger.PauseUntilUnlock);
+        sm.Fire(Trigger.ScreenWake);
+        Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
+    }
+
+    [Fact]
+    public void ScreenWake_IgnoredInPausedTimed()
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+        sm.Fire(Trigger.ScreenWake);
+        Assert.Equal(State.PausedTimed, sm.CurrentState);
+    }
+
+    // --- Full cycle with screen sleep ---
+
+    [Fact]
+    public void FullCycle_ScreenSleep_LExpires_ScreenWake_TExpiresAgain()
+    {
+        var sm = CreateMachine();
+
+        sm.Fire(Trigger.ScreenSleep);
+        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+
+        sm.Fire(Trigger.LTimerExpired);
+        Assert.Equal(State.Idle, sm.CurrentState);
+
+        sm.Fire(Trigger.ScreenWake);
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+
+        sm.Fire(Trigger.TTimerExpired);
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+    }
+
     // --- Invalid transitions (should throw) ---
 
     // From T_TimerRunning: unhandled triggers
