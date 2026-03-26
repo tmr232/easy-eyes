@@ -138,10 +138,11 @@ public partial class MainWindow : Window
 
     private void InitializeTrayIcon()
     {
+        var iconStream = System.Reflection.Assembly.GetExecutingAssembly()
+            .GetManifestResourceStream("tray.ico")!;
         _trayIcon = new Forms.NotifyIcon
         {
-            //TODO: Make sure we can get this from our resources in a single-binary release
-            Icon = new System.Drawing.Icon(System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "tray.ico")),
+            Icon = new System.Drawing.Icon(iconStream),
             Text = "Easy Eyes",
             Visible = true
         };
