@@ -991,3 +991,358 @@ public class EasyEyesStateMachineTests
         Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
     }
 }
+
+/// <summary>
+/// Given-When-Then style tests for the EasyEyes state machine.
+/// These tests describe scenarios in terms of preconditions, events, and expected outcomes.
+/// </summary>
+public class GivenWhenThenTests
+{
+    private readonly MockActions _actions = new();
+    private EasyEyesStateMachine CreateMachine() => new(_actions);
+
+    // --- Screen lock / unlock scenarios ---
+
+    [Fact]
+    public void Given_ScreenLockedAndLExpired_When_ScreenUnlocked_Then_OverlayIsHidden()
+    {
+        // Given: screen is locked and L expired (overlay was displayed before lock)
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);  // overlay displayed
+        sm.Fire(Trigger.ScreenLock);     // screen locked
+        sm.Fire(Trigger.LTimerExpired);  // L expired → ToastDisplayed (hides overlay)
+        _actions.Calls.Clear();
+
+        // When: screen is unlocked
+        sm.Fire(Trigger.ScreenUnlock);
+
+        // Then: overlay is hidden (it was already hidden on L expiry, and not re-shown)
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_OverlayDisplayedAndScreenLocked_When_LExpires_Then_ToastIsDisplayed()
+    {
+        // Given: overlay is displayed and screen is locked
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);  // overlay displayed
+        sm.Fire(Trigger.ScreenLock);     // screen locked, L timer starts
+        _actions.Calls.Clear();
+
+        // When: L expires
+        sm.Fire(Trigger.LTimerExpired);
+
+        // Then: toast is displayed
+        Assert.Equal(State.ToastDisplayed, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_TTimerRunning_When_TExpires_Then_OverlayIsDisplayed()
+    {
+        // Given: T timer is running (initial state)
+        var sm = CreateMachine();
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+
+        // When: T expires
+        sm.Fire(Trigger.TTimerExpired);
+
+        // Then: overlay is displayed
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_TTimerRunning_When_ScreenLocked_Then_TIsSuspendedAndLStarts()
+    {
+        // Given: T timer is running
+        var sm = CreateMachine();
+        _actions.Calls.Clear();
+
+        // When: screen is locked
+        sm.Fire(Trigger.ScreenLock);
+
+        // Then: T is suspended and L starts
+        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(
+            new[] { nameof(IEasyEyesActions.SuspendTTimer), nameof(IEasyEyesActions.RestartLTimer) },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void Given_ScreenLockedAndLRunning_When_ScreenUnlocked_Then_TResumesAndLStops()
+    {
+        // Given: screen is locked and L timer is running
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenLock);
+        _actions.Calls.Clear();
+
+        // When: screen is unlocked
+        sm.Fire(Trigger.ScreenUnlock);
+
+        // Then: T resumes and L stops
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.StopLTimer), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_ScreenLockedWithoutOverlay_When_LExpires_Then_NoToastIsDisplayed()
+    {
+        // Given: screen is locked without overlay having been displayed
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenLock);
+        _actions.Calls.Clear();
+
+        // When: L expires
+        sm.Fire(Trigger.LTimerExpired);
+
+        // Then: no toast is displayed, goes to Idle
+        Assert.Equal(State.Idle, sm.CurrentState);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+    }
+
+    // --- Quick lock/unlock scenarios ---
+
+    [Fact]
+    public void Given_OverlayDisplayedAndQuickLockUnlock_When_LockedAgainAndLExpires_Then_ToastIsDisplayed()
+    {
+        // Given: overlay was displayed, then a quick lock/unlock happened (L didn't expire)
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);  // overlay displayed
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.ScreenUnlock);   // quick unlock before L expires
+        _actions.Calls.Clear();
+
+        // When: locked again and L expires
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.LTimerExpired);
+
+        // Then: toast is displayed (overlay flag was preserved)
+        Assert.Equal(State.ToastDisplayed, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+    }
+
+    // --- Pause scenarios ---
+
+    [Fact]
+    public void Given_OverlayDisplayed_When_Paused_Then_OverlayIsHidden()
+    {
+        // Given: overlay is displayed
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);
+        _actions.Calls.Clear();
+
+        // When: user pauses
+        sm.Fire(Trigger.Pause);
+
+        // Then: overlay is hidden
+        Assert.Equal(State.Paused, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.HideOverlay), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_Paused_When_Resumed_Then_TTimerRestartsFromZero()
+    {
+        // Given: paused
+        var sm = CreateMachine();
+        sm.Fire(Trigger.Pause);
+        _actions.Calls.Clear();
+
+        // When: resumed
+        sm.Fire(Trigger.Resume);
+
+        // Then: T timer is reset and resumed (restarts from zero)
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(
+            new[] { nameof(IEasyEyesActions.ResetTTimer), nameof(IEasyEyesActions.ResumeTTimer) },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void Given_OverlayDisplayedThenPausedAndResumed_When_LockedAndLExpires_Then_NoToast()
+    {
+        // Given: overlay was displayed, then paused (clears overlay flag), then resumed
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);  // overlay displayed
+        sm.Fire(Trigger.Pause);          // clears overlay flag
+        sm.Fire(Trigger.Resume);
+
+        // When: locked and L expires
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.LTimerExpired);
+
+        // Then: no toast (overlay flag was cleared by pause)
+        Assert.Equal(State.Idle, sm.CurrentState);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+    }
+
+    // --- PauseUntilUnlock scenarios ---
+
+    [Fact]
+    public void Given_PausedUntilUnlock_When_ScreenUnlocked_Then_TTimerResets()
+    {
+        // Given: paused until unlock
+        var sm = CreateMachine();
+        sm.Fire(Trigger.PauseUntilUnlock);
+        _actions.Calls.Clear();
+
+        // When: screen is unlocked
+        sm.Fire(Trigger.ScreenUnlock);
+
+        // Then: T timer resets and resumes
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ResetTTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_PausedUntilUnlock_When_ScreenLocked_Then_NothingHappens()
+    {
+        // Given: paused until unlock
+        var sm = CreateMachine();
+        sm.Fire(Trigger.PauseUntilUnlock);
+        _actions.Calls.Clear();
+
+        // When: screen is locked
+        sm.Fire(Trigger.ScreenLock);
+
+        // Then: state unchanged, no actions
+        Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
+        Assert.Empty(_actions.Calls);
+    }
+
+    // --- PauseForDuration (snooze) scenarios ---
+
+    [Fact]
+    public void Given_PausedTimed_When_SnoozeExpires_Then_TTimerRestartsAndSnoozeStops()
+    {
+        // Given: paused for a timed duration
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+        _actions.Calls.Clear();
+
+        // When: snooze expires
+        sm.Fire(Trigger.SnoozeExpired);
+
+        // Then: snooze timer stops, T resets and resumes
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(
+            new[]
+            {
+                nameof(IEasyEyesActions.StopSnoozeTimer),
+                nameof(IEasyEyesActions.ResetTTimer),
+                nameof(IEasyEyesActions.ResumeTTimer),
+            },
+            _actions.Calls.ToArray());
+    }
+
+    [Fact]
+    public void Given_PausedTimed_When_ManuallyResumed_Then_SnoozeStopsAndTRestarts()
+    {
+        // Given: paused for a timed duration
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(10));
+        _actions.Calls.Clear();
+
+        // When: manually resumed
+        sm.Fire(Trigger.Resume);
+
+        // Then: snooze timer stops, T resets and resumes
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.StopSnoozeTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.ResetTTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
+    }
+
+    // --- Screen sleep scenarios ---
+
+    [Fact]
+    public void Given_OverlayDisplayed_When_ScreenSleeps_Then_OverlayIsHiddenAndLStarts()
+    {
+        // Given: overlay is displayed
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);
+        _actions.Calls.Clear();
+
+        // When: screen sleeps
+        sm.Fire(Trigger.ScreenSleep);
+
+        // Then: overlay is hidden and L timer starts
+        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.HideOverlay), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.RestartLTimer), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_OverlayDisplayedAndScreenSlept_When_LExpires_Then_NoToast()
+    {
+        // Given: overlay was displayed but screen went to sleep
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);  // overlay displayed
+        sm.Fire(Trigger.ScreenSleep);    // screen sleeps
+
+        // When: L expires
+        sm.Fire(Trigger.LTimerExpired);
+
+        // Then: no toast (sleep doesn't count as a deliberate rest)
+        Assert.Equal(State.Idle, sm.CurrentState);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_ScreenAsleep_When_ScreenWakes_Then_TResumesAndLStops()
+    {
+        // Given: screen is asleep (L running)
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ScreenSleep);
+        _actions.Calls.Clear();
+
+        // When: screen wakes
+        sm.Fire(Trigger.ScreenWake);
+
+        // Then: T resumes and L stops
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.StopLTimer), _actions.Calls);
+    }
+
+    // --- Full cycle scenarios ---
+
+    [Fact]
+    public void Given_FreshStart_When_FullRestCycleCompletes_Then_TRestartsFromZero()
+    {
+        // Given: fresh start
+        var sm = CreateMachine();
+
+        // When: T expires → overlay → lock → L expires (rest completed) → unlock
+        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.LTimerExpired);
+        _actions.Calls.Clear();
+        sm.Fire(Trigger.ScreenUnlock);
+
+        // Then: T restarts (was reset during L expiry)
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_ToastDisplayed_When_ScreenUnlocked_Then_ToastIsCleared()
+    {
+        // Given: toast is displayed (overlay → lock → L expired)
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.LTimerExpired);
+        _actions.Calls.Clear();
+
+        // When: screen is unlocked
+        sm.Fire(Trigger.ScreenUnlock);
+
+        // Then: toast is cleared
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ClearToast), _actions.Calls);
+    }
+}
