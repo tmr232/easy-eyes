@@ -7,6 +7,7 @@ public class EasyEyesActions : IEasyEyesActions
     private readonly DispatcherTimer _tTimer;
     private readonly DispatcherTimer _lTimer;
     private readonly DispatcherTimer _snoozeTimer;
+    private readonly TimeProvider _timeProvider;
     private readonly Action _showOverlay;
     private readonly Action _hideOverlay;
     private readonly Action _showToast;
@@ -23,6 +24,7 @@ public class EasyEyesActions : IEasyEyesActions
     private bool _snoozeRunning;
 
     public EasyEyesActions(
+        TimeProvider timeProvider,
         TimeSpan tDuration,
         TimeSpan lDuration,
         Action showOverlay,
@@ -31,6 +33,7 @@ public class EasyEyesActions : IEasyEyesActions
         Action clearToast,
         Action<Trigger> fireTrigger)
     {
+        _timeProvider = timeProvider;
         _tDuration = tDuration;
         _lDuration = lDuration;
         _tRemaining = tDuration;
@@ -72,7 +75,7 @@ public class EasyEyesActions : IEasyEyesActions
     {
         if (_tTimer.IsEnabled)
         {
-            _tRemaining -= DateTime.UtcNow - _tStartedAt;
+            _tRemaining -= _timeProvider.GetUtcNow().UtcDateTime - _tStartedAt;
             if (_tRemaining < TimeSpan.Zero)
                 _tRemaining = TimeSpan.Zero;
             _tTimer.Stop();
@@ -83,7 +86,7 @@ public class EasyEyesActions : IEasyEyesActions
     public void ResumeTTimer()
     {
         _tTimer.Interval = _tRemaining;
-        _tStartedAt = DateTime.UtcNow;
+        _tStartedAt = _timeProvider.GetUtcNow().UtcDateTime;
         _tRunning = true;
         _tTimer.Start();
     }
@@ -111,7 +114,7 @@ public class EasyEyesActions : IEasyEyesActions
     {
         _snoozeTimer.Stop();
         _snoozeRemaining = duration;
-        _snoozeStartedAt = DateTime.UtcNow;
+        _snoozeStartedAt = _timeProvider.GetUtcNow().UtcDateTime;
         _snoozeRunning = true;
         _snoozeTimer.Interval = duration;
         _snoozeTimer.Start();
@@ -130,7 +133,7 @@ public class EasyEyesActions : IEasyEyesActions
     {
         if (_tRunning)
         {
-            var elapsed = DateTime.UtcNow - _tStartedAt;
+            var elapsed = _timeProvider.GetUtcNow().UtcDateTime - _tStartedAt;
             var remaining = _tRemaining - elapsed;
             return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
         }
@@ -145,7 +148,7 @@ public class EasyEyesActions : IEasyEyesActions
     {
         if (_snoozeRunning)
         {
-            var elapsed = DateTime.UtcNow - _snoozeStartedAt;
+            var elapsed = _timeProvider.GetUtcNow().UtcDateTime - _snoozeStartedAt;
             var remaining = _snoozeRemaining - elapsed;
             return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
         }
@@ -160,7 +163,7 @@ public class EasyEyesActions : IEasyEyesActions
     {
         _tTimer.Interval = _tDuration;
         _tRemaining = _tDuration;
-        _tStartedAt = DateTime.UtcNow;
+        _tStartedAt = _timeProvider.GetUtcNow().UtcDateTime;
         _tRunning = true;
         _tTimer.Start();
     }

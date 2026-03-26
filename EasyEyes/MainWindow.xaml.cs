@@ -18,11 +18,6 @@ public partial class MainWindow : Window
     private const int WS_EX_TOOLWINDOW = 0x00000080;
     private const int WS_EX_NOACTIVATE = 0x08000000;
 
-    private const int WM_WTSSESSION_CHANGE = 0x02B1;
-    private const int WTS_SESSION_LOCK = 0x7;
-    private const int WTS_SESSION_UNLOCK = 0x8;
-    private const int NOTIFY_FOR_THIS_SESSION = 0x0;
-
     private const double SpotlightRadius = 200;
 
     [DllImport("user32.dll")]
@@ -35,12 +30,6 @@ public partial class MainWindow : Window
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCursorPos(out POINT lpPoint);
 
-    [DllImport("wtsapi32.dll")]
-    private static extern bool WTSRegisterSessionNotification(IntPtr hWnd, int dwFlags);
-
-    [DllImport("wtsapi32.dll")]
-    private static extern bool WTSUnRegisterSessionNotification(IntPtr hWnd);
-
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
     {
@@ -48,6 +37,7 @@ public partial class MainWindow : Window
         public int Y;
     }
 
+    private SessionNotificationListener? _sessionListener;
     private Forms.NotifyIcon _trayIcon = null!;
     private Forms.ToolStripLabel _tRemainingLabel = null!;
     private Forms.ToolStripLabel _snoozeRemainingLabel = null!;
@@ -76,6 +66,7 @@ public partial class MainWindow : Window
 
         EasyEyesStateMachine? stateMachine = null;
         _actions = new EasyEyesActions(
+            TimeProvider.System,
             tDuration: TimeSpan.FromMinutes(20),
             lDuration: TimeSpan.FromSeconds(20),
             showOverlay: DoShowOverlay,
@@ -258,45 +249,33 @@ public partial class MainWindow : Window
     {
         var hwnd = new WindowInteropHelper(this).Handle;
 
-        var source = HwndSource.FromHwnd(hwnd);
-        source?.AddHook(WndProc);
-        WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION);
+        _sessionListener = new SessionNotificationListener(this);
+        _sessionListener.SessionLocked += (_, _) =>
+        {
+            App.Log($"SessionLocked, State={_stateMachine.CurrentState}");
+            _stateMachine.Fire(Trigger.ScreenLock);
+        };
+        _sessionListener.SessionUnlocked += (_, _) =>
+        {
+            App.Log($"SessionUnlocked, State={_stateMachine.CurrentState}");
+            _stateMachine.Fire(Trigger.ScreenUnlock);
+        };
 
         int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
         _ = SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
-    }
-
-    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (msg == WM_WTSSESSION_CHANGE)
-        {
-            var sessionEvent = wParam.ToInt32();
-            App.Log($"WM_WTSSESSION_CHANGE wParam=0x{sessionEvent:X}, State={_stateMachine.CurrentState}");
-
-            switch (sessionEvent)
-            {
-                case WTS_SESSION_LOCK:
-                    _stateMachine.Fire(Trigger.ScreenLock);
-                    break;
-                case WTS_SESSION_UNLOCK:
-                    _stateMachine.Fire(Trigger.ScreenUnlock);
-                    break;
-            }
-        }
-
-        return IntPtr.Zero;
     }
 
     private static void ShowUrgentNotification(string message)
     {
         try
         {
+            var escaped = System.Security.SecurityElement.Escape(message);
             var xml = $"""
                 <toast scenario="urgent">
                   <visual>
                     <binding template="ToastGeneric">
                       <text>Easy Eyes</text>
-                      <text>{message}</text>
+                      <text>{escaped}</text>
                     </binding>
                   </visual>
                 </toast>
@@ -337,8 +316,7 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         App.Log($"MainWindow OnClosed, State={_stateMachine.CurrentState}");
-        var hwnd = new WindowInteropHelper(this).Handle;
-        WTSUnRegisterSessionNotification(hwnd);
+        _sessionListener?.Dispose();
         CompositionTarget.Rendering -= OnRendering;
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
