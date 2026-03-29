@@ -60,6 +60,8 @@ public class EasyEyesStateMachine
     private readonly IEasyEyesActions _actions;
     private bool _wasOverlayDisplayed;
     private bool _wasScreenSleep;
+    private bool _tExpiredDuringSnooze;
+    private bool _leavingPausedTimed;
 
     public State CurrentState => _machine.State;
 
@@ -160,13 +162,12 @@ public class EasyEyesStateMachine
             })
             .OnEntryFrom(Trigger.Resume, () =>
             {
-                _actions.ResetTTimer();
-                _actions.ResumeTTimer();
-            })
-            .OnEntryFrom(Trigger.SnoozeExpired, () =>
-            {
-                _actions.ResetTTimer();
-                _actions.ResumeTTimer();
+                if (!_leavingPausedTimed)
+                {
+                    _actions.ResetTTimer();
+                    _actions.ResumeTTimer();
+                }
+                _leavingPausedTimed = false;
             });
 
         // Pause states
@@ -207,7 +208,7 @@ public class EasyEyesStateMachine
         _machine.Configure(State.PausedTimed)
             .OnEntryFrom(_pauseForDurationTrigger, (duration) =>
             {
-                _actions.SuspendTTimer();
+                _tExpiredDuringSnooze = _wasOverlayDisplayed;
                 _actions.HideOverlay();
                 _wasOverlayDisplayed = false;
                 _actions.StartSnoozeTimer(duration);
@@ -215,14 +216,21 @@ public class EasyEyesStateMachine
             .OnExit(() =>
             {
                 _actions.StopSnoozeTimer();
+                _leavingPausedTimed = true;
+                _tExpiredDuringSnooze = false;
             })
-            .Permit(Trigger.SnoozeExpired, State.T_TimerRunning)
-            .Permit(Trigger.Resume, State.T_TimerRunning)
+            .InternalTransition(Trigger.TTimerExpired, () =>
+            {
+                _tExpiredDuringSnooze = true;
+            })
+            .PermitIf(Trigger.SnoozeExpired, State.OverlayDisplayed, () => _tExpiredDuringSnooze)
+            .PermitIf(Trigger.SnoozeExpired, State.T_TimerRunning, () => !_tExpiredDuringSnooze)
+            .PermitIf(Trigger.Resume, State.OverlayDisplayed, () => _tExpiredDuringSnooze)
+            .PermitIf(Trigger.Resume, State.T_TimerRunning, () => !_tExpiredDuringSnooze)
             .Ignore(Trigger.ScreenLock)
             .Ignore(Trigger.ScreenUnlock)
             .Ignore(Trigger.ScreenSleep)
             .Ignore(Trigger.ScreenWake)
-            .Ignore(Trigger.TTimerExpired)
             .Ignore(Trigger.LTimerExpired);
     }
 

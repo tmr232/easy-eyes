@@ -555,7 +555,6 @@ public class EasyEyesStateMachineTests
         Assert.Equal(
             new[]
             {
-                nameof(IEasyEyesActions.SuspendTTimer),
                 nameof(IEasyEyesActions.HideOverlay),
                 nameof(IEasyEyesActions.StartSnoozeTimer),
             },
@@ -575,7 +574,6 @@ public class EasyEyesStateMachineTests
         Assert.Equal(
             new[]
             {
-                nameof(IEasyEyesActions.SuspendTTimer),
                 nameof(IEasyEyesActions.HideOverlay),
                 nameof(IEasyEyesActions.StartSnoozeTimer),
             },
@@ -592,13 +590,11 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.SnoozeExpired);
 
         Assert.Equal(State.T_TimerRunning, sm.CurrentState);
-        // OnExit stops snooze, then OnEntryFrom(SnoozeExpired) resets + resumes T
+        // T was not suspended, so no reset/resume — just stop snooze
         Assert.Equal(
             new[]
             {
                 nameof(IEasyEyesActions.StopSnoozeTimer),
-                nameof(IEasyEyesActions.ResetTTimer),
-                nameof(IEasyEyesActions.ResumeTTimer),
             },
             _actions.Calls.ToArray());
     }
@@ -613,13 +609,11 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.Resume);
 
         Assert.Equal(State.T_TimerRunning, sm.CurrentState);
-        // OnExit stops snooze, then OnEntryFrom(Resume) resets + resumes T
+        // T was not suspended, so no reset/resume — just stop snooze
         Assert.Equal(
             new[]
             {
                 nameof(IEasyEyesActions.StopSnoozeTimer),
-                nameof(IEasyEyesActions.ResetTTimer),
-                nameof(IEasyEyesActions.ResumeTTimer),
             },
             _actions.Calls.ToArray());
     }
@@ -633,7 +627,6 @@ public class EasyEyesStateMachineTests
 
         sm.Fire(Trigger.ScreenLock);
         sm.Fire(Trigger.ScreenUnlock);
-        sm.Fire(Trigger.TTimerExpired);
         sm.Fire(Trigger.LTimerExpired);
 
         Assert.Equal(State.PausedTimed, sm.CurrentState);
@@ -641,18 +634,14 @@ public class EasyEyesStateMachineTests
     }
 
     [Fact]
-    public void PauseForDuration_ResetsOverlayFlag()
+    public void PauseForDuration_FromOverlayDisplayed_SnoozeExpires_ShowsOverlay()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);            // overlay displayed, flag = true
-        sm.FirePauseForDuration(TimeSpan.FromMinutes(5)); // should reset flag
-        sm.Fire(Trigger.SnoozeExpired);            // → T_TimerRunning
+        sm.Fire(Trigger.TTimerExpired);            // overlay displayed, T expired
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(5)); // hides overlay, T already expired
+        sm.Fire(Trigger.SnoozeExpired);            // → OverlayDisplayed (T was expired)
 
-        // Lock + L expires → should go to Idle (not Toast)
-        sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.LTimerExpired);
-
-        Assert.Equal(State.Idle, sm.CurrentState);
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
     }
 
     [Fact]
@@ -683,6 +672,56 @@ public class EasyEyesStateMachineTests
 
         sm.Fire(Trigger.TTimerExpired);
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+    }
+
+    // --- PausedTimed: T expires during snooze ---
+
+    [Fact]
+    public void PausedTimed_TTimerExpiresDuringSnooze_SnoozeExpires_GoesToOverlayDisplayed()
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+        sm.Fire(Trigger.TTimerExpired); // T expires during snooze
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.SnoozeExpired);
+
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
+    }
+
+    [Fact]
+    public void PausedTimed_TTimerExpiresDuringSnooze_ManualResume_GoesToOverlayDisplayed()
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+        sm.Fire(Trigger.TTimerExpired); // T expires during snooze
+        _actions.Calls.Clear();
+
+        sm.Fire(Trigger.Resume);
+
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
+    }
+
+    [Fact]
+    public void PausedTimed_TTimerExpiresDuringSnooze_StaysInPausedTimed()
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+
+        sm.Fire(Trigger.TTimerExpired);
+
+        Assert.Equal(State.PausedTimed, sm.CurrentState);
+    }
+
+    [Fact]
+    public void PausedTimed_DoesNotSuspendTTimer()
+    {
+        var sm = CreateMachine();
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+
+        Assert.DoesNotContain(nameof(IEasyEyesActions.SuspendTTimer), _actions.Calls);
     }
 
     // --- Screen Sleep ---
@@ -1216,44 +1255,45 @@ public class GivenWhenThenTests
     // --- PauseForDuration (snooze) scenarios ---
 
     [Fact]
-    public void Given_PausedTimed_When_SnoozeExpires_Then_TTimerRestartsAndSnoozeStops()
+    public void Given_PausedTimed_When_SnoozeExpires_Then_SnoozeStopsAndTKeepsRunning()
     {
-        // Given: paused for a timed duration
+        // Given: paused for a timed duration (T keeps running)
         var sm = CreateMachine();
         sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
         _actions.Calls.Clear();
 
-        // When: snooze expires
+        // When: snooze expires (T hasn't expired)
         sm.Fire(Trigger.SnoozeExpired);
 
-        // Then: snooze timer stops, T resets and resumes
+        // Then: snooze timer stops, T was never suspended so no reset/resume
         Assert.Equal(State.T_TimerRunning, sm.CurrentState);
         Assert.Equal(
             new[]
             {
                 nameof(IEasyEyesActions.StopSnoozeTimer),
-                nameof(IEasyEyesActions.ResetTTimer),
-                nameof(IEasyEyesActions.ResumeTTimer),
             },
             _actions.Calls.ToArray());
     }
 
     [Fact]
-    public void Given_PausedTimed_When_ManuallyResumed_Then_SnoozeStopsAndTRestarts()
+    public void Given_PausedTimed_When_ManuallyResumed_Then_SnoozeStopsAndTKeepsRunning()
     {
-        // Given: paused for a timed duration
+        // Given: paused for a timed duration (T keeps running)
         var sm = CreateMachine();
         sm.FirePauseForDuration(TimeSpan.FromMinutes(10));
         _actions.Calls.Clear();
 
-        // When: manually resumed
+        // When: manually resumed (T hasn't expired)
         sm.Fire(Trigger.Resume);
 
-        // Then: snooze timer stops, T resets and resumes
+        // Then: snooze timer stops, T was never suspended so no reset/resume
         Assert.Equal(State.T_TimerRunning, sm.CurrentState);
-        Assert.Contains(nameof(IEasyEyesActions.StopSnoozeTimer), _actions.Calls);
-        Assert.Contains(nameof(IEasyEyesActions.ResetTTimer), _actions.Calls);
-        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
+        Assert.Equal(
+            new[]
+            {
+                nameof(IEasyEyesActions.StopSnoozeTimer),
+            },
+            _actions.Calls.ToArray());
     }
 
     // --- Screen sleep scenarios ---

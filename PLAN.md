@@ -47,9 +47,10 @@ All side effects (timers, overlay, toast) are injected via the
 - **ScreenUnlock**: resumes T timer, stops L timer
 - **T expires**: shows overlay
 - **L expires**: resets T timer, hides overlay; shows toast only if overlay was displayed
-- **Pause / PauseUntilUnlock / PauseForDuration**: suspends T timer, hides overlay, clears overlay flag; PauseForDuration also starts snooze timer S
-- **Resume** (from any paused state): resets and resumes T timer; PausedTimed also stops snooze timer (via OnExit)
-- **SnoozeExpired**: same as Resume — stops snooze timer, resets and resumes T timer
+- **Pause / PauseUntilUnlock**: suspends T timer, hides overlay, clears overlay flag
+- **PauseForDuration**: hides overlay, starts snooze timer S; T timer keeps running
+- **Resume** (from Paused/PausedUntilUnlock): resets and resumes T timer
+- **Resume / SnoozeExpired** (from PausedTimed): stops snooze timer; if T expired during snooze → shows overlay (transitions to OverlayDisplayed); otherwise → T_TimerRunning (T is still running)
 - **ScreenUnlock from PausedUntilUnlock**: resets T (via OnExit), then resumes T
 
 ### Tray Menu
