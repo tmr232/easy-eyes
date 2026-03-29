@@ -6,6 +6,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using Microsoft.Toolkit.Uwp.Notifications;
+using Windows.Media.Control;
 using Forms = System.Windows.Forms;
 
 namespace EasyEyes;
@@ -46,6 +47,7 @@ public partial class MainWindow : Window
     private Forms.ToolStripMenuItem _pauseUntilUnlockItem = null!;
     private Forms.ToolStripMenuItem _pauseForItem = null!;
     private Forms.ToolStripMenuItem _cancelSnoozeItem = null!;
+    private bool _pauseMediaOnLock = true;
     private readonly RadialGradientBrush _spotlightMask;
     private readonly EasyEyesStateMachine _stateMachine;
     private readonly EasyEyesActions _actions;
@@ -184,6 +186,16 @@ public partial class MainWindow : Window
         menu.Items.Add(_cancelSnoozeItem);
 
         menu.Items.Add(new Forms.ToolStripSeparator());
+
+        var pauseMediaOnLockItem = new Forms.ToolStripMenuItem("Pause media on lock")
+        {
+            CheckOnClick = true,
+            Checked = _pauseMediaOnLock
+        };
+        pauseMediaOnLockItem.CheckedChanged += (_, _) => _pauseMediaOnLock = pauseMediaOnLockItem.Checked;
+        menu.Items.Add(pauseMediaOnLockItem);
+
+        menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) =>
         {
             _trayIcon.Visible = false;
@@ -254,6 +266,7 @@ public partial class MainWindow : Window
         {
             App.Log($"SessionLocked, State={_stateMachine.CurrentState}");
             _stateMachine.Fire(Trigger.ScreenLock);
+            PauseMediaIfEnabled();
         };
         _sessionListener.SessionUnlocked += (_, _) =>
         {
@@ -264,6 +277,7 @@ public partial class MainWindow : Window
         {
             App.Log($"DisplayOff, State={_stateMachine.CurrentState}");
             _stateMachine.Fire(Trigger.ScreenSleep);
+            PauseMediaIfEnabled();
         };
         _sessionListener.DisplayOn += (_, _) =>
         {
@@ -273,6 +287,24 @@ public partial class MainWindow : Window
 
         int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
         _ = SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+    }
+
+    private async void PauseMediaIfEnabled()
+    {
+        if (!_pauseMediaOnLock) return;
+        try
+        {
+            var sessionManager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            var session = sessionManager.GetCurrentSession();
+            if (session != null)
+            {
+                await session.TryPauseAsync();
+            }
+        }
+        catch
+        {
+            // No media session available or pause not supported
+        }
     }
 
     private static void ShowUrgentNotification(string message)
