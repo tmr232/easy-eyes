@@ -41,12 +41,8 @@ public partial class MainWindow : Window
     private SessionNotificationListener? _sessionListener;
     private Forms.NotifyIcon _trayIcon = null!;
     private Forms.ToolStripLabel _tRemainingLabel = null!;
-    private Forms.ToolStripLabel _snoozeRemainingLabel = null!;
-    private Forms.ToolStripMenuItem _pauseItem = null!;
-    private Forms.ToolStripMenuItem _resumeItem = null!;
     private Forms.ToolStripMenuItem _pauseUntilUnlockItem = null!;
     private Forms.ToolStripMenuItem _pauseForItem = null!;
-    private Forms.ToolStripMenuItem _cancelSnoozeItem = null!;
     private bool _pauseMediaOnLock = true;
     private readonly RadialGradientBrush _spotlightMask;
     private readonly EasyEyesStateMachine _stateMachine;
@@ -145,19 +141,7 @@ public partial class MainWindow : Window
         _tRemainingLabel = new Forms.ToolStripLabel { Enabled = false };
         menu.Items.Add(_tRemainingLabel);
 
-        _snoozeRemainingLabel = new Forms.ToolStripLabel { Enabled = false, Visible = false };
-        menu.Items.Add(_snoozeRemainingLabel);
-
         menu.Items.Add(new Forms.ToolStripSeparator());
-
-        _pauseItem = new Forms.ToolStripMenuItem("Pause");
-        _pauseItem.Click += (_, _) => _stateMachine.Fire(Trigger.Pause);
-        menu.Items.Add(_pauseItem);
-
-        _resumeItem = new Forms.ToolStripMenuItem("Resume");
-        _resumeItem.Click += (_, _) => _stateMachine.Fire(Trigger.Resume);
-        _resumeItem.Visible = false;
-        menu.Items.Add(_resumeItem);
 
         _pauseUntilUnlockItem = new Forms.ToolStripMenuItem("Pause until unlock");
         _pauseUntilUnlockItem.Click += (_, _) =>
@@ -179,11 +163,6 @@ public partial class MainWindow : Window
             }
         };
         menu.Items.Add(_pauseForItem);
-
-        _cancelSnoozeItem = new Forms.ToolStripMenuItem("Cancel snooze");
-        _cancelSnoozeItem.Click += (_, _) => _stateMachine.Fire(Trigger.Resume);
-        _cancelSnoozeItem.Visible = false;
-        menu.Items.Add(_cancelSnoozeItem);
 
         menu.Items.Add(new Forms.ToolStripSeparator());
 
@@ -211,9 +190,8 @@ public partial class MainWindow : Window
     private void UpdateTrayMenu()
     {
         var state = _stateMachine.CurrentState;
-        var isPaused = state is State.Paused or State.PausedUntilUnlock or State.PausedTimed;
+        var isPaused = state is State.PausedUntilUnlock;
         var isActive = state is State.T_TimerRunning or State.OverlayDisplayed;
-        var isSnoozed = state == State.PausedTimed;
 
         // T timer display
         if (isActive)
@@ -232,29 +210,12 @@ public partial class MainWindow : Window
             _tRemainingLabel.Visible = false;
         }
 
-        // Snooze display
-        if (isSnoozed)
-        {
-            var snoozeRemaining = _actions.GetSnoozeRemaining();
-            _snoozeRemainingLabel.Text = $"Snoozed: {snoozeRemaining:mm\\:ss} remaining";
-            _snoozeRemainingLabel.Visible = true;
-        }
-        else
-        {
-            _snoozeRemainingLabel.Visible = false;
-        }
-
-        // Pause / Resume swap
-        _pauseItem.Visible = isActive;
-        _resumeItem.Visible = state == State.Paused;
-
         // Pause until unlock toggle
         _pauseUntilUnlockItem.Checked = state == State.PausedUntilUnlock;
         _pauseUntilUnlockItem.Visible = isActive || state == State.PausedUntilUnlock;
 
-        // Pause for... / Cancel snooze
+        // Pause for...
         _pauseForItem.Visible = isActive;
-        _cancelSnoozeItem.Visible = isSnoozed;
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)

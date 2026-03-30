@@ -6,7 +6,6 @@ public class EasyEyesActions : IEasyEyesActions
 {
     private readonly DispatcherTimer _tTimer;
     private readonly DispatcherTimer _lTimer;
-    private readonly DispatcherTimer _snoozeTimer;
     private readonly TimeProvider _timeProvider;
     private readonly Action _showOverlay;
     private readonly Action _hideOverlay;
@@ -18,10 +17,6 @@ public class EasyEyesActions : IEasyEyesActions
     private readonly TimeSpan _lDuration;
     private DateTime _tStartedAt;
     private bool _tRunning;
-
-    private TimeSpan _snoozeRemaining;
-    private DateTime _snoozeStartedAt;
-    private bool _snoozeRunning;
 
     public EasyEyesActions(
         TimeProvider timeProvider,
@@ -55,14 +50,6 @@ public class EasyEyesActions : IEasyEyesActions
         {
             _lTimer.Stop();
             fireTrigger(Trigger.LTimerExpired);
-        };
-
-        _snoozeTimer = new DispatcherTimer();
-        _snoozeTimer.Tick += (_, _) =>
-        {
-            _snoozeTimer.Stop();
-            _snoozeRunning = false;
-            fireTrigger(Trigger.SnoozeExpired);
         };
     }
 
@@ -110,22 +97,6 @@ public class EasyEyesActions : IEasyEyesActions
         _lTimer.Stop();
     }
 
-    public void StartSnoozeTimer(TimeSpan duration)
-    {
-        _snoozeTimer.Stop();
-        _snoozeRemaining = duration;
-        _snoozeStartedAt = _timeProvider.GetUtcNow().UtcDateTime;
-        _snoozeRunning = true;
-        _snoozeTimer.Interval = duration;
-        _snoozeTimer.Start();
-    }
-
-    public void StopSnoozeTimer()
-    {
-        _snoozeTimer.Stop();
-        _snoozeRunning = false;
-    }
-
     /// <summary>
     /// Returns the time remaining on the T timer.
     /// </summary>
@@ -141,19 +112,10 @@ public class EasyEyesActions : IEasyEyesActions
         return _tRemaining;
     }
 
-    /// <summary>
-    /// Returns the time remaining on the snooze timer, or TimeSpan.Zero if not running.
-    /// </summary>
-    public TimeSpan GetSnoozeRemaining()
+    public void ExtendTTimer(TimeSpan duration)
     {
-        if (_snoozeRunning)
-        {
-            var elapsed = _timeProvider.GetUtcNow().UtcDateTime - _snoozeStartedAt;
-            var remaining = _snoozeRemaining - elapsed;
-            return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
-        }
-
-        return TimeSpan.Zero;
+        if (duration > _tRemaining)
+            _tRemaining = duration;
     }
 
     /// <summary>

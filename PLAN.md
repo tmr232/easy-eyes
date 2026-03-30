@@ -23,23 +23,19 @@ All side effects (timers, overlay, toast) are injected via the
   - **L_TimerRunning** — initial substate; the 20-second lock timer is running
   - **ToastDisplayed** — L expired while overlay was showing; toast was shown
   - **Idle** — L expired while overlay was not showing; no toast
-- **Paused** — user manually paused; resumes only via explicit Resume
 - **PausedUntilUnlock** — paused until next screen unlock (toggleable via tray checkmark)
-- **PausedTimed** — paused for a user-specified duration (snooze timer S running)
 
 ### Triggers
 
-| Trigger            | Description                                         |
-| ------------------ | --------------------------------------------------- |
-| `ScreenLock`       | OS session lock detected                            |
-| `ScreenUnlock`     | OS session unlock detected                          |
-| `TTimerExpired`    | The 20-minute eye-rest timer expired                |
-| `LTimerExpired`    | The 20-second lock timer expired                    |
-| `Pause`            | User requests manual pause                          |
-| `Resume`           | User requests resume (from any paused state)        |
-| `PauseUntilUnlock` | User requests pause until next screen unlock        |
-| `PauseForDuration` | User requests timed pause (parameterized: TimeSpan) |
-| `SnoozeExpired`    | The timed-pause snooze timer expired                |
+| Trigger            | Description                                                                                                 |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `ScreenLock`       | OS session lock detected                                                                                    |
+| `ScreenUnlock`     | OS session unlock detected                                                                                  |
+| `TTimerExpired`    | The 20-minute eye-rest timer expired                                                                        |
+| `LTimerExpired`    | The 20-second lock timer expired                                                                            |
+| `Resume`           | User requests resume (from PausedUntilUnlock)                                                               |
+| `PauseUntilUnlock` | User requests pause until next screen unlock                                                                |
+| `PauseForDuration` | User requests timed extension (parameterized: TimeSpan); extends T.remaining to at least the given duration |
 
 ### Transition Actions
 
@@ -47,9 +43,9 @@ All side effects (timers, overlay, toast) are injected via the
 - **ScreenUnlock**: resumes T timer, stops L timer
 - **T expires**: shows overlay
 - **L expires**: resets T timer, hides overlay; shows toast only if overlay was displayed
-- **Pause / PauseUntilUnlock / PauseForDuration**: suspends T timer, hides overlay, clears overlay flag; PauseForDuration also starts snooze timer S
-- **Resume** (from any paused state): resets and resumes T timer; PausedTimed also stops snooze timer (via OnExit)
-- **SnoozeExpired**: same as Resume — stops snooze timer, resets and resumes T timer
+- **PauseUntilUnlock**: suspends T timer, hides overlay, clears overlay flag
+- **PauseForDuration**: suspends T timer, hides overlay, clears overlay flag, sets `T.remaining = max(duration, T.remaining)`, resumes T timer (returns to T_TimerRunning)
+- **Resume** (from PausedUntilUnlock): resets T (via OnExit), then resumes T timer
 - **ScreenUnlock from PausedUntilUnlock**: resets T (via OnExit), then resumes T
 
 ### Tray Menu
@@ -57,11 +53,8 @@ All side effects (timers, overlay, toast) are injected via the
 The system tray context menu provides:
 
 - **T timer display** — shows remaining time (`T: mm:ss remaining`) or `T: paused`
-- **Snooze display** — shows remaining snooze time when in PausedTimed state
-- **Pause / Resume** — swaps between the two based on state
 - **Pause until unlock** — checkmark toggle; checked when in PausedUntilUnlock
-- **Pause for...** — opens a dialog to enter minutes; starts timed pause
-- **Cancel snooze** — visible only during PausedTimed; fires Resume
+- **Pause for...** — opens a dialog to enter minutes; extends T.remaining to at least that duration
 - **Exit** — shuts down the application
 
 Menu items are shown/hidden dynamically via the `ContextMenuStrip.Opening` event.
