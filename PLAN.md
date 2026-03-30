@@ -25,7 +25,8 @@ All side effects (timers, overlay, toast) are injected via the
   - **Idle** — L expired while overlay was not showing; no toast
 - **Paused** — user manually paused; resumes only via explicit Resume
 - **PausedUntilUnlock** — paused until next screen unlock (toggleable via tray checkmark)
-- **PausedTimed** — paused for a user-specified duration (snooze timer S running)
+- **PausedTimed** — paused for a user-specified duration (snooze timer S running, T still ticking)
+  - **PausedTimedTExpired** — T expired during the snooze; overlay will show when snooze ends
 
 ### Triggers
 
@@ -48,9 +49,11 @@ All side effects (timers, overlay, toast) are injected via the
 - **T expires**: shows overlay
 - **L expires**: resets T timer, hides overlay; shows toast only if overlay was displayed
 - **Pause / PauseUntilUnlock**: suspends T timer, hides overlay, clears overlay flag
-- **PauseForDuration**: hides overlay, starts snooze timer S; T timer keeps running
+- **PauseForDuration**: hides overlay, starts snooze timer S; T timer keeps running. If overlay was displayed (T already expired), enters PausedTimedTExpired directly
+- **TTimerExpired** (during PausedTimed): transitions to PausedTimedTExpired (snooze keeps running)
 - **Resume** (from Paused/PausedUntilUnlock): resets and resumes T timer
-- **Resume / SnoozeExpired** (from PausedTimed): stops snooze timer; if T expired during snooze → shows overlay (transitions to OverlayDisplayed); otherwise → T_TimerRunning (T is still running)
+- **Resume / SnoozeExpired** (from PausedTimed): stops snooze timer → T_TimerRunning (T resets)
+- **Resume / SnoozeExpired** (from PausedTimedTExpired): stops snooze timer → OverlayDisplayed (shows overlay)
 - **ScreenUnlock from PausedUntilUnlock**: resets T (via OnExit), then resumes T
 
 ### Tray Menu

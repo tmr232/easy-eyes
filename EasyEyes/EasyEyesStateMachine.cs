@@ -17,6 +17,7 @@ public enum State
     Paused,
     PausedUntilUnlock,
     PausedTimed,
+    PausedTimedTExpired,
 
     // Superstates (not used directly as current state, but for substate grouping)
     ScreenUnlocked,
@@ -60,8 +61,6 @@ public class EasyEyesStateMachine
     private readonly IEasyEyesActions _actions;
     private bool _wasOverlayDisplayed;
     private bool _wasScreenSleep;
-    private bool _tExpiredDuringSnooze;
-    private bool _leavingPausedTimed;
 
     public State CurrentState => _machine.State;
 
@@ -106,7 +105,16 @@ public class EasyEyesStateMachine
             {
                 _wasOverlayDisplayed = true;
                 _actions.ShowOverlay();
-            });
+            })
+            .OnEntryFrom(Trigger.SnoozeExpired, () =>
+            {
+                _actions.StopSnoozeTimer();
+            })
+            .OnEntryFrom(Trigger.Resume, () =>
+            {
+                _actions.StopSnoozeTimer();
+            })
+            .Permit(Trigger.PauseForDuration, State.PausedTimedTExpired);
 
         // ScreenLocked substates
         _machine.Configure(State.L_TimerRunning)
@@ -160,14 +168,15 @@ public class EasyEyesStateMachine
                 _actions.StopLTimer();
                 _actions.ClearToast();
             })
+            .OnEntryFrom(Trigger.SnoozeExpired, () =>
+            {
+                _actions.StopSnoozeTimer();
+            })
             .OnEntryFrom(Trigger.Resume, () =>
             {
-                if (!_leavingPausedTimed)
-                {
-                    _actions.ResetTTimer();
-                    _actions.ResumeTTimer();
-                }
-                _leavingPausedTimed = false;
+                _actions.StopSnoozeTimer();
+                _actions.ResetTTimer();
+                _actions.ResumeTTimer();
             });
 
         // Pause states
@@ -208,29 +217,33 @@ public class EasyEyesStateMachine
         _machine.Configure(State.PausedTimed)
             .OnEntryFrom(_pauseForDurationTrigger, (duration) =>
             {
-                _tExpiredDuringSnooze = _wasOverlayDisplayed;
                 _actions.HideOverlay();
                 _wasOverlayDisplayed = false;
                 _actions.StartSnoozeTimer(duration);
             })
-            .OnExit(() =>
-            {
-                _actions.StopSnoozeTimer();
-                _leavingPausedTimed = true;
-                _tExpiredDuringSnooze = false;
-            })
-            .InternalTransition(Trigger.TTimerExpired, () =>
-            {
-                _tExpiredDuringSnooze = true;
-            })
-            .PermitIf(Trigger.SnoozeExpired, State.OverlayDisplayed, () => _tExpiredDuringSnooze)
-            .PermitIf(Trigger.SnoozeExpired, State.T_TimerRunning, () => !_tExpiredDuringSnooze)
-            .PermitIf(Trigger.Resume, State.OverlayDisplayed, () => _tExpiredDuringSnooze)
-            .PermitIf(Trigger.Resume, State.T_TimerRunning, () => !_tExpiredDuringSnooze)
+            .Permit(Trigger.SnoozeExpired, State.T_TimerRunning)
+            .Permit(Trigger.Resume, State.T_TimerRunning)
+            .Permit(Trigger.TTimerExpired, State.PausedTimedTExpired)
             .Ignore(Trigger.ScreenLock)
             .Ignore(Trigger.ScreenUnlock)
             .Ignore(Trigger.ScreenSleep)
             .Ignore(Trigger.ScreenWake)
+            .Ignore(Trigger.LTimerExpired);
+
+        _machine.Configure(State.PausedTimedTExpired)
+            .OnEntryFrom(_pauseForDurationTrigger, (duration) =>
+            {
+                _actions.HideOverlay();
+                _wasOverlayDisplayed = false;
+                _actions.StartSnoozeTimer(duration);
+            })
+            .Permit(Trigger.SnoozeExpired, State.OverlayDisplayed)
+            .Permit(Trigger.Resume, State.OverlayDisplayed)
+            .Ignore(Trigger.ScreenLock)
+            .Ignore(Trigger.ScreenUnlock)
+            .Ignore(Trigger.ScreenSleep)
+            .Ignore(Trigger.ScreenWake)
+            .Ignore(Trigger.TTimerExpired)
             .Ignore(Trigger.LTimerExpired);
     }
 

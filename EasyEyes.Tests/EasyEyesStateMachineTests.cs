@@ -361,7 +361,7 @@ public class EasyEyesStateMachineTests
 
         Assert.Equal(State.T_TimerRunning, sm.CurrentState);
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.ResetTTimer), nameof(IEasyEyesActions.ResumeTTimer) },
+            new[] { nameof(IEasyEyesActions.StopSnoozeTimer), nameof(IEasyEyesActions.ResetTTimer), nameof(IEasyEyesActions.ResumeTTimer) },
             _actions.Calls.ToArray());
     }
 
@@ -570,7 +570,7 @@ public class EasyEyesStateMachineTests
 
         sm.FirePauseForDuration(TimeSpan.FromMinutes(10));
 
-        Assert.Equal(State.PausedTimed, sm.CurrentState);
+        Assert.Equal(State.PausedTimedTExpired, sm.CurrentState);
         Assert.Equal(
             new[]
             {
@@ -609,11 +609,13 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.Resume);
 
         Assert.Equal(State.T_TimerRunning, sm.CurrentState);
-        // T was not suspended, so no reset/resume — just stop snooze
+        // Resume resets T timer (same as other pause states)
         Assert.Equal(
             new[]
             {
                 nameof(IEasyEyesActions.StopSnoozeTimer),
+                nameof(IEasyEyesActions.ResetTTimer),
+                nameof(IEasyEyesActions.ResumeTTimer),
             },
             _actions.Calls.ToArray());
     }
@@ -705,14 +707,14 @@ public class EasyEyesStateMachineTests
     }
 
     [Fact]
-    public void PausedTimed_TTimerExpiresDuringSnooze_StaysInPausedTimed()
+    public void PausedTimed_TTimerExpiresDuringSnooze_TransitionsToPausedTimedTExpired()
     {
         var sm = CreateMachine();
         sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
 
         sm.Fire(Trigger.TTimerExpired);
 
-        Assert.Equal(State.PausedTimed, sm.CurrentState);
+        Assert.Equal(State.PausedTimedTExpired, sm.CurrentState);
     }
 
     [Fact]
@@ -1195,7 +1197,7 @@ public class GivenWhenThenTests
         // Then: T timer is reset and resumed (restarts from zero)
         Assert.Equal(State.T_TimerRunning, sm.CurrentState);
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.ResetTTimer), nameof(IEasyEyesActions.ResumeTTimer) },
+            new[] { nameof(IEasyEyesActions.StopSnoozeTimer), nameof(IEasyEyesActions.ResetTTimer), nameof(IEasyEyesActions.ResumeTTimer) },
             _actions.Calls.ToArray());
     }
 
@@ -1276,7 +1278,7 @@ public class GivenWhenThenTests
     }
 
     [Fact]
-    public void Given_PausedTimed_When_ManuallyResumed_Then_SnoozeStopsAndTKeepsRunning()
+    public void Given_PausedTimed_When_ManuallyResumed_Then_SnoozeStopsAndTResets()
     {
         // Given: paused for a timed duration (T keeps running)
         var sm = CreateMachine();
@@ -1286,12 +1288,14 @@ public class GivenWhenThenTests
         // When: manually resumed (T hasn't expired)
         sm.Fire(Trigger.Resume);
 
-        // Then: snooze timer stops, T was never suspended so no reset/resume
+        // Then: snooze timer stops, T resets (consistent with other Resume paths)
         Assert.Equal(State.T_TimerRunning, sm.CurrentState);
         Assert.Equal(
             new[]
             {
                 nameof(IEasyEyesActions.StopSnoozeTimer),
+                nameof(IEasyEyesActions.ResetTTimer),
+                nameof(IEasyEyesActions.ResumeTTimer),
             },
             _actions.Calls.ToArray());
     }

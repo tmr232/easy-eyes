@@ -211,9 +211,9 @@ public partial class MainWindow : Window
     private void UpdateTrayMenu()
     {
         var state = _stateMachine.CurrentState;
-        var isPaused = state is State.Paused or State.PausedUntilUnlock or State.PausedTimed;
+        var isPaused = state is State.Paused or State.PausedUntilUnlock or State.PausedTimed or State.PausedTimedTExpired;
         var isActive = state is State.T_TimerRunning or State.OverlayDisplayed;
-        var isSnoozed = state == State.PausedTimed;
+        var isSnoozed = state is State.PausedTimed or State.PausedTimedTExpired;
 
         // T timer display
         if (isActive)
