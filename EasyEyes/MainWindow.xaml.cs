@@ -70,7 +70,6 @@ public partial class MainWindow : Window
             showOverlay: DoShowOverlay,
             hideOverlay: DoHideOverlay,
             showToast: () => SystemSounds.Asterisk.Play(),
-            clearToast: () => { },
             fireTrigger: trigger =>
             {
                 App.Log($"FireTrigger: {trigger}, CurrentState: {stateMachine!.CurrentState}");

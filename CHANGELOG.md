@@ -14,3 +14,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Removed
 
 - Remove `Microsoft.Toolkit.Uwp.Notifications` dependency
+- Remove `ClearToast` from state machine, actions interface, and implementation (no longer needed with sound-based reminders)

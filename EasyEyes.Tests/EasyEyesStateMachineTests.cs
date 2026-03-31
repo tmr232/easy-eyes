@@ -9,7 +9,6 @@ public class MockActions : IEasyEyesActions
     public void ShowOverlay() => Calls.Add(nameof(ShowOverlay));
     public void HideOverlay() => Calls.Add(nameof(HideOverlay));
     public void ShowToast() => Calls.Add(nameof(ShowToast));
-    public void ClearToast() => Calls.Add(nameof(ClearToast));
     public void SuspendTTimer() => Calls.Add(nameof(SuspendTTimer));
     public void ResumeTTimer() => Calls.Add(nameof(ResumeTTimer));
     public void ResetTTimer() => Calls.Add(nameof(ResetTTimer));
@@ -115,7 +114,7 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.ScreenUnlock);
 
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.ResumeTTimer), nameof(IEasyEyesActions.StopLTimer), nameof(IEasyEyesActions.ClearToast) },
+            new[] { nameof(IEasyEyesActions.ResumeTTimer), nameof(IEasyEyesActions.StopLTimer) },
             _actions.Calls.ToArray()
         );
     }
@@ -366,7 +365,6 @@ public class EasyEyesStateMachineTests
                 nameof(IEasyEyesActions.ResetTTimer),
                 nameof(IEasyEyesActions.ResumeTTimer),
                 nameof(IEasyEyesActions.StopLTimer),
-                nameof(IEasyEyesActions.ClearToast),
             },
             _actions.Calls.ToArray());
     }
@@ -594,7 +592,7 @@ public class EasyEyesStateMachineTests
     }
 
     [Fact]
-    public void ScreenWake_ResumesT_StopsL_ClearsToast()
+    public void ScreenWake_ResumesT_StopsL()
     {
         var sm = CreateMachine();
         sm.Fire(Trigger.ScreenSleep);
@@ -603,7 +601,7 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.ScreenWake);
 
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.ResumeTTimer), nameof(IEasyEyesActions.StopLTimer), nameof(IEasyEyesActions.ClearToast) },
+            new[] { nameof(IEasyEyesActions.ResumeTTimer), nameof(IEasyEyesActions.StopLTimer) },
             _actions.Calls.ToArray()
         );
     }
@@ -1045,21 +1043,4 @@ public class GivenWhenThenTests
         Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
     }
 
-    [Fact]
-    public void Given_ToastDisplayed_When_ScreenUnlocked_Then_ToastIsCleared()
-    {
-        // Given: toast is displayed (overlay → lock → L expired)
-        var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
-        sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.LTimerExpired);
-        _actions.Calls.Clear();
-
-        // When: screen is unlocked
-        sm.Fire(Trigger.ScreenUnlock);
-
-        // Then: toast is cleared
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
-        Assert.Contains(nameof(IEasyEyesActions.ClearToast), _actions.Calls);
-    }
 }
