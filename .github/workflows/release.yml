@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Verify tag matches CHANGELOG
+        shell: pwsh
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          $version = $env:TAG_NAME -replace '^v', ''
+          $changelog = Get-Content -Raw CHANGELOG.md
+          if ($changelog -notmatch [regex]::Escape("## [$version]")) {
+            Write-Error "CHANGELOG.md has no entry for version $version"
+            exit 1
+          }
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # ratchet:actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+          architecture: x64
+
+      - name: Restore dependencies
+        run: dotnet restore --locked-mode
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release
+
+      - name: Publish
+        run: dotnet publish EasyEyes/EasyEyes.csproj --configuration Release --output ./publish
+
+      - name: Extract release notes
+        id: notes
+        shell: pwsh
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          $version = $env:TAG_NAME -replace '^v', ''
+          $lines = Get-Content CHANGELOG.md
+          $capture = $false
+          $notes = @()
+          foreach ($line in $lines) {
+            if ($line -match "^## \[$([regex]::Escape($version))\]") {
+              $capture = $true
+              continue
+            }
+            if ($capture -and $line -match '^## \[') {
+              break
+            }
+            if ($capture) {
+              $notes += $line
+            }
+          }
+          $body = ($notes -join "`n").Trim()
+          $body | Set-Content -Path release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: >
+          gh release create "$env:TAG_NAME"
+          ./publish/EasyEyes.exe
+          --title "$env:TAG_NAME"
+          --notes-file release-notes.md
+          --verify-tag

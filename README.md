@@ -28,3 +28,13 @@ dotnet publish EasyEyes/EasyEyes.csproj --configuration Release --output ./publi
 ```
 
 This produces a single-file, self-contained executable in the `publish/` directory.
+
+## Release
+
+Releases are automated via GitHub Actions. To publish a new version:
+
+1. Update `CHANGELOG.md`: move items from `[Unreleased]` into a new `[x.y.z] - YYYY-MM-DD` section.
+2. Commit and push.
+3. Tag and push: `git tag vx.y.z && git push --tags`.
+
+The workflow builds, tests, and creates a GitHub Release with `EasyEyes.exe` attached and release notes extracted from the changelog.
