@@ -1,11 +1,11 @@
 using System;
 using System.Drawing;
+using System.Media;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using Microsoft.Toolkit.Uwp.Notifications;
 using Windows.Media.Control;
 using Forms = System.Windows.Forms;
 
@@ -69,8 +69,8 @@ public partial class MainWindow : Window
             lDuration: TimeSpan.FromSeconds(20),
             showOverlay: DoShowOverlay,
             hideOverlay: DoHideOverlay,
-            showToast: () => ShowUrgentNotification("Time to rest your eyes!"),
-            clearToast: ClearNotifications,
+            showToast: () => SystemSounds.Asterisk.Play(),
+            clearToast: () => { },
             fireTrigger: trigger =>
             {
                 App.Log($"FireTrigger: {trigger}, CurrentState: {stateMachine!.CurrentState}");
@@ -265,48 +265,6 @@ public partial class MainWindow : Window
         catch
         {
             // No media session available or pause not supported
-        }
-    }
-
-    private static void ShowUrgentNotification(string message)
-    {
-        try
-        {
-            var escaped = System.Security.SecurityElement.Escape(message);
-            var xml = $"""
-                <toast scenario="urgent">
-                  <visual>
-                    <binding template="ToastGeneric">
-                      <text>Easy Eyes</text>
-                      <text>{escaped}</text>
-                    </binding>
-                  </visual>
-                </toast>
-                """;
-
-            var doc = new Windows.Data.Xml.Dom.XmlDocument();
-            doc.LoadXml(xml);
-
-            ToastNotificationManagerCompat.CreateToastNotifier()
-                .Show(new Windows.UI.Notifications.ToastNotification(doc));
-        }
-        catch
-        {
-            // Toast delivery can fail when the session is locked or
-            // the notification platform is unavailable — swallow so
-            // it doesn't crash the app.
-        }
-    }
-
-    private static void ClearNotifications()
-    {
-        try
-        {
-            ToastNotificationManagerCompat.History.Clear();
-        }
-        catch
-        {
-            // Best-effort — notification platform may be unavailable.
         }
     }
 
