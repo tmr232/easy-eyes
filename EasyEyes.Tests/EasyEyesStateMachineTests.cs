@@ -1,4 +1,5 @@
 using EasyEyes;
+using Microsoft.Extensions.Time.Testing;
 
 namespace EasyEyes.Tests;
 
@@ -14,7 +15,12 @@ public class MockActions : IEasyEyesActions
     public void ResetTTimer() => Calls.Add(nameof(ResetTTimer));
     public void RestartLTimer() => Calls.Add(nameof(RestartLTimer));
     public void StopLTimer() => Calls.Add(nameof(StopLTimer));
-    public void ExtendTTimer(TimeSpan duration) => Calls.Add(nameof(ExtendTTimer));
+    public TimeSpan? LastExtendTTimerDuration { get; private set; }
+    public void ExtendTTimer(TimeSpan duration)
+    {
+        LastExtendTTimerDuration = duration;
+        Calls.Add(nameof(ExtendTTimer));
+    }
 }
 
 public class EasyEyesStateMachineTests
@@ -1043,4 +1049,52 @@ public class GivenWhenThenTests
         Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
     }
 
+    [Fact]
+    public void Given_OverlayDisplayed_When_PauseForXMinutes_Then_OverlayIsHiddenAndTIsSetToX()
+    {
+        // Given: T has expired and the overlay is displayed
+        var sm = CreateMachine();
+        sm.Fire(Trigger.TTimerExpired);
+        _actions.Calls.Clear();
+
+        // When: user pauses for X minutes
+        var pauseDuration = TimeSpan.FromMinutes(15);
+        sm.FirePauseForDuration(pauseDuration);
+
+        // Then: overlay is hidden and T is set to X
+        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.HideOverlay), _actions.Calls);
+        Assert.Equal(pauseDuration, _actions.LastExtendTTimerDuration);
+    }
+
+}
+
+public class EasyEyesActionsTests
+{
+    [Fact]
+    public void ExtendTTimer_AfterTExpired_SetsTRemainingToRequestedDuration()
+    {
+        // Given: T has expired (simulated by advancing time past tDuration and suspending)
+        var tDuration = TimeSpan.FromMinutes(20);
+        var fakeTime = new FakeTimeProvider();
+        var actions = new EasyEyesActions(
+            fakeTime,
+            tDuration: tDuration,
+            lDuration: TimeSpan.FromMinutes(5),
+            showOverlay: () => { },
+            hideOverlay: () => { },
+            showToast: () => { },
+            fireTrigger: _ => { });
+
+        actions.StartTTimer();
+        fakeTime.Advance(tDuration + TimeSpan.FromSeconds(1));
+        actions.SuspendTTimer(); // _tRemaining clamps to Zero
+
+        // When: ExtendTTimer is called with a duration shorter than the original tDuration
+        var pauseDuration = TimeSpan.FromMinutes(15);
+        actions.ExtendTTimer(pauseDuration);
+
+        // Then: T remaining is set to the requested duration, not the original 20 minutes
+        Assert.Equal(pauseDuration, actions.GetTRemaining());
+    }
 }

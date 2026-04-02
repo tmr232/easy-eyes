@@ -14,6 +14,12 @@
         "resolved": "3.0.27",
         "contentHash": "rlWM33Ldt8FJTai9F0KAhPEQrx9J7lX/lYgG2VJEnS7yoCoEEPTNgHN7M/Sigw02Kzv74NumxfH11UaPwbdJ8A=="
       },
+      "Microsoft.Extensions.TimeProvider.Testing": {
+        "type": "Direct",
+        "requested": "[10.4.0, )",
+        "resolved": "10.4.0",
+        "contentHash": "uJ8n9WUEzux9I2CjZh7imGBgZadfwhAKlxuBq7GsNGL8FJF81aHXAYaRMnwW+9EvRFQNytu7xo1ffeuuTncAzg=="
+      },
       "Microsoft.NET.Test.Sdk": {
         "type": "Direct",
         "requested": "[18.3.0, )",

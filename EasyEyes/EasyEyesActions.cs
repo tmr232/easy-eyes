@@ -38,6 +38,7 @@ public class EasyEyesActions : IEasyEyesActions
         _tTimer.Tick += (_, _) =>
         {
             _tTimer.Stop();
+            _tRemaining = TimeSpan.Zero;
             _tRunning = false;
             fireTrigger(Trigger.TTimerExpired);
         };

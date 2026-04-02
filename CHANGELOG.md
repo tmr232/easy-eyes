@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix pause-for-duration using original timer duration (e.g. 20 min) instead of the requested pause duration when T timer has already expired
+
 ### Changed
 
 - Replace toast notifications with a system sound (Asterisk) for break reminders
