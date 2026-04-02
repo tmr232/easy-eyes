@@ -1077,8 +1077,11 @@ public class EasyEyesActionsTests
         // Given: T has expired (simulated by advancing time past tDuration and suspending)
         var tDuration = TimeSpan.FromMinutes(20);
         var fakeTime = new FakeTimeProvider();
+        var tScheduler = new FakeTimerScheduler();
         var actions = new EasyEyesActions(
             fakeTime,
+            tScheduler: tScheduler,
+            lScheduler: new FakeTimerScheduler(),
             tDuration: tDuration,
             lDuration: TimeSpan.FromMinutes(5),
             showOverlay: () => { },

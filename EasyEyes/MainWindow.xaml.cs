@@ -65,6 +65,8 @@ public partial class MainWindow : Window
         EasyEyesStateMachine? stateMachine = null;
         _actions = new EasyEyesActions(
             TimeProvider.System,
+            tScheduler: new DispatcherTimerScheduler(),
+            lScheduler: new DispatcherTimerScheduler(),
             tDuration: TimeSpan.FromMinutes(20),
             lDuration: TimeSpan.FromSeconds(20),
             showOverlay: DoShowOverlay,

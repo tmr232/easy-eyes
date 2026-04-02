@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Extract `CountdownTimer` class to encapsulate timer state and enforce invariants (e.g. remaining time zeroed on expiry)
+- Introduce `ITimerScheduler` interface to decouple timer scheduling from WPF's `DispatcherTimer`, enabling unit testing
+- Refactor `EasyEyesActions` to delegate to `CountdownTimer` instead of managing timer state manually
 - Replace toast notifications with a system sound (Asterisk) for break reminders
 
 ### Removed
