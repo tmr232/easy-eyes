@@ -41,8 +41,9 @@ public class DispatcherTimerScheduler : ITimerScheduler
 
     private void OnTick(object? sender, EventArgs e)
     {
+        var callback = _callback;
         Cancel();
-        _callback?.Invoke();
+        callback?.Invoke();
     }
 }
 

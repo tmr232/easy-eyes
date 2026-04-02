@@ -293,4 +293,31 @@ public class CountdownTimerTests
 
         Assert.Equal(TimeSpan.Zero, timer.GetRemaining());
     }
+
+    [Fact]
+    public void Expire_CallbackCanRestartTimer()
+    {
+        // The expiry callback may re-enter the timer (e.g., state machine
+        // calling Reset + Start). This must work even though expiry cleans
+        // up scheduler state internally.
+        var scheduler = new FakeTimerScheduler();
+        var time = new FakeTimeProvider();
+        var expired = false;
+        CountdownTimer? timer = null;
+        timer = new CountdownTimer(time, scheduler, _duration, () =>
+        {
+            expired = true;
+            // Simulate state machine restarting the timer from within the callback
+            timer!.Reset();
+            timer.Start();
+        });
+
+        timer.Start();
+        time.Advance(_duration);
+        scheduler.Expire();
+
+        Assert.True(expired);
+        Assert.True(scheduler.IsRunning);
+        Assert.Equal(_duration, timer.GetRemaining());
+    }
 }
