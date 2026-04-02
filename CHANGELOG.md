@@ -7,6 +7,8 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+## [2026.04.02]
+
 ### Fixed
 
 - Fix pause-for-duration using original timer duration (e.g. 20 min) instead of the requested pause duration when T timer has already expired
