@@ -2,18 +2,18 @@ namespace EasyEyes;
 
 public class EasyEyesActions : IEasyEyesActions
 {
-    private readonly CountdownTimer _tTimer;
-    private readonly CountdownTimer _lTimer;
+    private readonly CountdownTimer _activityTimer;
+    private readonly CountdownTimer _restTimer;
     private readonly Action _showOverlay;
     private readonly Action _hideOverlay;
-    private readonly Action _showToast;
+    private readonly Action _notifyUser;
 
     public EasyEyesActions(
         TimeProvider timeProvider,
-        ITimerScheduler tScheduler,
-        ITimerScheduler lScheduler,
-        TimeSpan tDuration,
-        TimeSpan lDuration,
+        ITimerScheduler activityScheduler,
+        ITimerScheduler restScheduler,
+        TimeSpan activityDuration,
+        TimeSpan restDuration,
         Action showOverlay,
         Action hideOverlay,
         Action showToast,
@@ -21,35 +21,35 @@ public class EasyEyesActions : IEasyEyesActions
     {
         _showOverlay = showOverlay;
         _hideOverlay = hideOverlay;
-        _showToast = showToast;
+        _notifyUser = showToast;
 
-        _tTimer = new CountdownTimer(
-            timeProvider, tScheduler, tDuration,
-            () => fireTrigger(Trigger.TTimerExpired));
+        _activityTimer = new CountdownTimer(
+            timeProvider, activityScheduler, activityDuration,
+            () => fireTrigger(Trigger.ActivityTimerExpired));
 
-        _lTimer = new CountdownTimer(
-            timeProvider, lScheduler, lDuration,
-            () => fireTrigger(Trigger.LTimerExpired));
+        _restTimer = new CountdownTimer(
+            timeProvider, restScheduler, restDuration,
+            () => fireTrigger(Trigger.RestTimerExpired));
     }
 
     public void ShowOverlay() => _showOverlay();
     public void HideOverlay() => _hideOverlay();
-    public void ShowToast() => _showToast();
+    public void NotifyUser() => _notifyUser();
 
-    public void SuspendTTimer() => _tTimer.Suspend();
-    public void ResumeTTimer() => _tTimer.Resume();
-    public void ResetTTimer() => _tTimer.Reset();
-    public void RestartLTimer()
+    public void SuspendActivityTimer() => _activityTimer.Suspend();
+    public void ResumeActivityTimer() => _activityTimer.Resume();
+    public void ResetActivityTimer() => _activityTimer.Reset();
+    public void RestartRestTimer()
     {
-        _lTimer.Stop();
-        _lTimer.Start();
+        _restTimer.Stop();
+        _restTimer.Start();
     }
 
-    public void StopLTimer() => _lTimer.Stop();
+    public void StopRestTimer() => _restTimer.Stop();
 
-    public TimeSpan GetTRemaining() => _tTimer.GetRemaining();
+    public TimeSpan GetTRemaining() => _activityTimer.GetRemaining();
 
-    public void ExtendTTimer(TimeSpan duration) => _tTimer.Extend(duration);
+    public void ExtendActivityTimer(TimeSpan duration) => _activityTimer.Extend(duration);
 
-    public void StartTTimer() => _tTimer.Start();
+    public void StartActivityTimer() => _activityTimer.Start();
 }
