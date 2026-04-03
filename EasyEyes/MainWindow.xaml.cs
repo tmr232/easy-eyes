@@ -40,7 +40,7 @@ public partial class MainWindow : Window
 
     private SessionNotificationListener? _sessionListener;
     private Forms.NotifyIcon _trayIcon = null!;
-    private Forms.ToolStripLabel _tRemainingLabel = null!;
+    private Forms.ToolStripLabel _activityTimeRemainingLabel = null!;
     private Forms.ToolStripMenuItem _pauseUntilUnlockItem = null!;
     private Forms.ToolStripMenuItem _pauseForItem = null!;
     private bool _pauseMediaOnLock = true;
@@ -65,10 +65,10 @@ public partial class MainWindow : Window
         EasyEyesStateMachine? stateMachine = null;
         _actions = new EasyEyesActions(
             TimeProvider.System,
-            tScheduler: new DispatcherTimerScheduler(),
-            lScheduler: new DispatcherTimerScheduler(),
-            tDuration: TimeSpan.FromMinutes(20),
-            lDuration: TimeSpan.FromSeconds(20),
+            activityScheduler: new DispatcherTimerScheduler(),
+            restScheduler: new DispatcherTimerScheduler(),
+            activityDuration: TimeSpan.FromMinutes(20),
+            restDuration: TimeSpan.FromSeconds(20),
             showOverlay: DoShowOverlay,
             hideOverlay: DoHideOverlay,
             showToast: () => SystemSounds.Asterisk.Play(),
@@ -100,7 +100,7 @@ public partial class MainWindow : Window
         Width = SystemParameters.VirtualScreenWidth;
         Height = SystemParameters.VirtualScreenHeight - 1;
 
-        _actions.StartTTimer();
+        _actions.StartActivityTimer();
     }
 
     private void OnRendering(object? sender, EventArgs e)
@@ -139,8 +139,8 @@ public partial class MainWindow : Window
 
         var menu = new Forms.ContextMenuStrip();
 
-        _tRemainingLabel = new Forms.ToolStripLabel { Enabled = false };
-        menu.Items.Add(_tRemainingLabel);
+        _activityTimeRemainingLabel = new Forms.ToolStripLabel { Enabled = false };
+        menu.Items.Add(_activityTimeRemainingLabel);
 
         menu.Items.Add(new Forms.ToolStripSeparator());
 
@@ -192,23 +192,23 @@ public partial class MainWindow : Window
     {
         var state = _stateMachine.CurrentState;
         var isPaused = state is State.PausedUntilUnlock;
-        var isActive = state is State.T_TimerRunning or State.OverlayDisplayed;
+        var isActive = state is State.ActivityTimerRunning or State.OverlayDisplayed;
 
         // T timer display
         if (isActive)
         {
             var remaining = _actions.GetTRemaining();
-            _tRemainingLabel.Text = $"T: {remaining:mm\\:ss} remaining";
-            _tRemainingLabel.Visible = true;
+            _activityTimeRemainingLabel.Text = $"T: {remaining:mm\\:ss} remaining";
+            _activityTimeRemainingLabel.Visible = true;
         }
         else if (isPaused)
         {
-            _tRemainingLabel.Text = "T: paused";
-            _tRemainingLabel.Visible = true;
+            _activityTimeRemainingLabel.Text = "T: paused";
+            _activityTimeRemainingLabel.Visible = true;
         }
         else
         {
-            _tRemainingLabel.Visible = false;
+            _activityTimeRemainingLabel.Visible = false;
         }
 
         // Pause until unlock toggle

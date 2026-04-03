@@ -9,17 +9,17 @@ public class MockActions : IEasyEyesActions
 
     public void ShowOverlay() => Calls.Add(nameof(ShowOverlay));
     public void HideOverlay() => Calls.Add(nameof(HideOverlay));
-    public void ShowToast() => Calls.Add(nameof(ShowToast));
-    public void SuspendTTimer() => Calls.Add(nameof(SuspendTTimer));
-    public void ResumeTTimer() => Calls.Add(nameof(ResumeTTimer));
-    public void ResetTTimer() => Calls.Add(nameof(ResetTTimer));
-    public void RestartLTimer() => Calls.Add(nameof(RestartLTimer));
-    public void StopLTimer() => Calls.Add(nameof(StopLTimer));
+    public void NotifyUser() => Calls.Add(nameof(NotifyUser));
+    public void SuspendActivityTimer() => Calls.Add(nameof(SuspendActivityTimer));
+    public void ResumeActivityTimer() => Calls.Add(nameof(ResumeActivityTimer));
+    public void ResetActivityTimer() => Calls.Add(nameof(ResetActivityTimer));
+    public void RestartRestTimer() => Calls.Add(nameof(RestartRestTimer));
+    public void StopRestTimer() => Calls.Add(nameof(StopRestTimer));
     public TimeSpan? LastExtendTTimerDuration { get; private set; }
-    public void ExtendTTimer(TimeSpan duration)
+    public void ExtendActivityTimer(TimeSpan duration)
     {
         LastExtendTTimerDuration = duration;
-        Calls.Add(nameof(ExtendTTimer));
+        Calls.Add(nameof(ExtendActivityTimer));
     }
 }
 
@@ -33,7 +33,7 @@ public class EasyEyesStateMachineTests
     public void InitialState_Is_T_TimerRunning()
     {
         var sm = CreateMachine();
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         Assert.True(sm.IsInState(State.ScreenUnlocked));
     }
 
@@ -43,7 +43,7 @@ public class EasyEyesStateMachineTests
     public void TTimerExpired_TransitionsTo_OverlayDisplayed()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
 
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
         Assert.True(sm.IsInState(State.ScreenUnlocked));
@@ -53,7 +53,7 @@ public class EasyEyesStateMachineTests
     public void TTimerExpired_Calls_ShowOverlay()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
 
         Assert.Contains(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
     }
@@ -66,7 +66,7 @@ public class EasyEyesStateMachineTests
         var sm = CreateMachine();
         sm.Fire(Trigger.ScreenLock);
 
-        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
         Assert.True(sm.IsInState(State.ScreenLocked));
     }
 
@@ -77,7 +77,7 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.ScreenLock);
 
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.SuspendTTimer), nameof(IEasyEyesActions.RestartLTimer) },
+            new[] { nameof(IEasyEyesActions.SuspendActivityTimer), nameof(IEasyEyesActions.RestartRestTimer) },
             _actions.Calls.ToArray()
         );
     }
@@ -86,12 +86,12 @@ public class EasyEyesStateMachineTests
     public void ScreenLock_FromOverlayDisplayed_TransitionsTo_L_TimerRunning()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired); // → OverlayDisplayed
+        sm.Fire(Trigger.ActivityTimerExpired); // → OverlayDisplayed
         _actions.Calls.Clear();
 
         sm.Fire(Trigger.ScreenLock);
 
-        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
         Assert.True(sm.IsInState(State.ScreenLocked));
     }
 
@@ -106,7 +106,7 @@ public class EasyEyesStateMachineTests
 
         sm.Fire(Trigger.ScreenUnlock);
 
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         Assert.True(sm.IsInState(State.ScreenUnlocked));
     }
 
@@ -120,7 +120,7 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.ScreenUnlock);
 
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.ResumeTTimer), nameof(IEasyEyesActions.StopLTimer) },
+            new[] { nameof(IEasyEyesActions.ResumeActivityTimer), nameof(IEasyEyesActions.StopRestTimer) },
             _actions.Calls.ToArray()
         );
     }
@@ -131,10 +131,10 @@ public class EasyEyesStateMachineTests
     public void LTimerExpired_WhenOverlayWasDisplayed_TransitionsTo_ToastDisplayed()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);  // → OverlayDisplayed (sets _wasOverlayDisplayed)
+        sm.Fire(Trigger.ActivityTimerExpired);  // → OverlayDisplayed (sets _wasOverlayDisplayed)
         sm.Fire(Trigger.ScreenLock);     // → L_TimerRunning
 
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         Assert.Equal(State.ToastDisplayed, sm.CurrentState);
         Assert.True(sm.IsInState(State.ScreenLocked));
@@ -144,18 +144,18 @@ public class EasyEyesStateMachineTests
     public void LTimerExpired_WhenOverlayWasDisplayed_ResetsT_HidesOverlay_ShowsToast()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         sm.Fire(Trigger.ScreenLock);
         _actions.Calls.Clear();
 
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         Assert.Equal(
             new[]
             {
-                nameof(IEasyEyesActions.ResetTTimer),
+                nameof(IEasyEyesActions.ResetActivityTimer),
                 nameof(IEasyEyesActions.HideOverlay),
-                nameof(IEasyEyesActions.ShowToast),
+                nameof(IEasyEyesActions.NotifyUser),
             },
             _actions.Calls.ToArray()
         );
@@ -169,7 +169,7 @@ public class EasyEyesStateMachineTests
         var sm = CreateMachine();
         sm.Fire(Trigger.ScreenLock); // → L_TimerRunning (overlay was never shown)
 
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         Assert.Equal(State.Idle, sm.CurrentState);
         Assert.True(sm.IsInState(State.ScreenLocked));
@@ -182,17 +182,17 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.ScreenLock);
         _actions.Calls.Clear();
 
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         Assert.Equal(
             new[]
             {
-                nameof(IEasyEyesActions.ResetTTimer),
+                nameof(IEasyEyesActions.ResetActivityTimer),
                 nameof(IEasyEyesActions.HideOverlay),
             },
             _actions.Calls.ToArray()
         );
-        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.NotifyUser), _actions.Calls);
     }
 
     // --- Unlock from ToastDisplayed / Idle ---
@@ -201,13 +201,13 @@ public class EasyEyesStateMachineTests
     public void ScreenUnlock_FromToastDisplayed_TransitionsTo_T_TimerRunning()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.LTimerExpired); // → ToastDisplayed
+        sm.Fire(Trigger.RestTimerExpired); // → ToastDisplayed
 
         sm.Fire(Trigger.ScreenUnlock);
 
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
     }
 
     [Fact]
@@ -215,11 +215,11 @@ public class EasyEyesStateMachineTests
     {
         var sm = CreateMachine();
         sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.LTimerExpired); // → Idle
+        sm.Fire(Trigger.RestTimerExpired); // → Idle
 
         sm.Fire(Trigger.ScreenUnlock);
 
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
     }
 
     // --- Full cycle: lock → L expires → unlock → T expires again ---
@@ -229,19 +229,19 @@ public class EasyEyesStateMachineTests
     {
         var sm = CreateMachine();
 
-        sm.Fire(Trigger.TTimerExpired);  // T_TimerRunning → OverlayDisplayed
+        sm.Fire(Trigger.ActivityTimerExpired);  // T_TimerRunning → OverlayDisplayed
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
 
         sm.Fire(Trigger.ScreenLock);     // → L_TimerRunning
-        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
 
-        sm.Fire(Trigger.LTimerExpired);  // → ToastDisplayed (overlay was shown)
+        sm.Fire(Trigger.RestTimerExpired);  // → ToastDisplayed (overlay was shown)
         Assert.Equal(State.ToastDisplayed, sm.CurrentState);
 
         sm.Fire(Trigger.ScreenUnlock);   // → T_TimerRunning
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
 
-        sm.Fire(Trigger.TTimerExpired);  // → OverlayDisplayed again
+        sm.Fire(Trigger.ActivityTimerExpired);  // → OverlayDisplayed again
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
     }
 
@@ -251,13 +251,13 @@ public class EasyEyesStateMachineTests
         var sm = CreateMachine();
 
         sm.Fire(Trigger.ScreenLock);     // → L_TimerRunning
-        sm.Fire(Trigger.LTimerExpired);  // → Idle (no overlay)
+        sm.Fire(Trigger.RestTimerExpired);  // → Idle (no overlay)
         Assert.Equal(State.Idle, sm.CurrentState);
 
         sm.Fire(Trigger.ScreenUnlock);   // → T_TimerRunning
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
 
-        sm.Fire(Trigger.TTimerExpired);  // → OverlayDisplayed
+        sm.Fire(Trigger.ActivityTimerExpired);  // → OverlayDisplayed
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
     }
 
@@ -267,13 +267,13 @@ public class EasyEyesStateMachineTests
     public void QuickLockUnlock_WithOverlay_OverlayStillTracked()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);  // → OverlayDisplayed
+        sm.Fire(Trigger.ActivityTimerExpired);  // → OverlayDisplayed
         sm.Fire(Trigger.ScreenLock);     // → L_TimerRunning
         sm.Fire(Trigger.ScreenUnlock);   // → T_TimerRunning (T resumed, still expired)
 
         // Lock again — overlay was displayed flag should still be true
         sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         Assert.Equal(State.ToastDisplayed, sm.CurrentState);
     }
@@ -287,7 +287,7 @@ public class EasyEyesStateMachineTests
 
         sm.Fire(Trigger.ScreenLock); // duplicate — should be ignored
 
-        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
         Assert.Empty(_actions.Calls);
     }
 
@@ -299,7 +299,7 @@ public class EasyEyesStateMachineTests
 
         sm.Fire(Trigger.ScreenUnlock); // already unlocked — should be ignored
 
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         Assert.Empty(_actions.Calls);
     }
 
@@ -312,7 +312,7 @@ public class EasyEyesStateMachineTests
 
         // Lock again — overlay was never displayed
         sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         Assert.Equal(State.Idle, sm.CurrentState);
     }
@@ -335,7 +335,7 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.PauseUntilUnlock);
 
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.SuspendTTimer), nameof(IEasyEyesActions.HideOverlay) },
+            new[] { nameof(IEasyEyesActions.SuspendActivityTimer), nameof(IEasyEyesActions.HideOverlay) },
             _actions.Calls.ToArray());
     }
 
@@ -343,14 +343,14 @@ public class EasyEyesStateMachineTests
     public void PauseUntilUnlock_FromOverlayDisplayed()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         _actions.Calls.Clear();
 
         sm.Fire(Trigger.PauseUntilUnlock);
 
         Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.SuspendTTimer), nameof(IEasyEyesActions.HideOverlay) },
+            new[] { nameof(IEasyEyesActions.SuspendActivityTimer), nameof(IEasyEyesActions.HideOverlay) },
             _actions.Calls.ToArray());
     }
 
@@ -363,14 +363,14 @@ public class EasyEyesStateMachineTests
 
         sm.Fire(Trigger.ScreenUnlock);
 
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         // OnExit resets T, then OnEntryFrom(ScreenUnlock) resumes T
         Assert.Equal(
             new[]
             {
-                nameof(IEasyEyesActions.ResetTTimer),
-                nameof(IEasyEyesActions.ResumeTTimer),
-                nameof(IEasyEyesActions.StopLTimer),
+                nameof(IEasyEyesActions.ResetActivityTimer),
+                nameof(IEasyEyesActions.ResumeActivityTimer),
+                nameof(IEasyEyesActions.StopRestTimer),
             },
             _actions.Calls.ToArray());
     }
@@ -384,10 +384,10 @@ public class EasyEyesStateMachineTests
 
         sm.Fire(Trigger.Resume);
 
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         // OnExit resets T, then OnEntryFrom(Resume) also resets + resumes
-        Assert.Contains(nameof(IEasyEyesActions.ResetTTimer), _actions.Calls);
-        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.ResetActivityTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeActivityTimer), _actions.Calls);
     }
 
     [Fact]
@@ -398,8 +398,8 @@ public class EasyEyesStateMachineTests
         _actions.Calls.Clear();
 
         sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.TTimerExpired);
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
         Assert.Empty(_actions.Calls);
@@ -409,13 +409,13 @@ public class EasyEyesStateMachineTests
     public void PauseUntilUnlock_ResetsOverlayFlag()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);      // overlay displayed, flag = true
+        sm.Fire(Trigger.ActivityTimerExpired);      // overlay displayed, flag = true
         sm.Fire(Trigger.PauseUntilUnlock);   // should reset flag
         sm.Fire(Trigger.ScreenUnlock);       // → T_TimerRunning
 
         // Lock + L expires → should go to Idle (not Toast)
         sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         Assert.Equal(State.Idle, sm.CurrentState);
     }
@@ -434,9 +434,9 @@ public class EasyEyesStateMachineTests
 
         // Unlock auto-resumes
         sm.Fire(Trigger.ScreenUnlock);
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
 
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
     }
 
@@ -448,7 +448,7 @@ public class EasyEyesStateMachineTests
         var sm = CreateMachine();
         sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
 
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
     }
 
     [Fact]
@@ -460,10 +460,10 @@ public class EasyEyesStateMachineTests
         Assert.Equal(
             new[]
             {
-                nameof(IEasyEyesActions.SuspendTTimer),
+                nameof(IEasyEyesActions.SuspendActivityTimer),
                 nameof(IEasyEyesActions.HideOverlay),
-                nameof(IEasyEyesActions.ExtendTTimer),
-                nameof(IEasyEyesActions.ResumeTTimer),
+                nameof(IEasyEyesActions.ExtendActivityTimer),
+                nameof(IEasyEyesActions.ResumeActivityTimer),
             },
             _actions.Calls.ToArray());
     }
@@ -472,19 +472,19 @@ public class EasyEyesStateMachineTests
     public void PauseForDuration_FromOverlayDisplayed()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         _actions.Calls.Clear();
 
         sm.FirePauseForDuration(TimeSpan.FromMinutes(10));
 
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         Assert.Equal(
             new[]
             {
-                nameof(IEasyEyesActions.SuspendTTimer),
+                nameof(IEasyEyesActions.SuspendActivityTimer),
                 nameof(IEasyEyesActions.HideOverlay),
-                nameof(IEasyEyesActions.ExtendTTimer),
-                nameof(IEasyEyesActions.ResumeTTimer),
+                nameof(IEasyEyesActions.ExtendActivityTimer),
+                nameof(IEasyEyesActions.ResumeActivityTimer),
             },
             _actions.Calls.ToArray());
     }
@@ -493,12 +493,12 @@ public class EasyEyesStateMachineTests
     public void PauseForDuration_ResetsOverlayFlag()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);            // overlay displayed, flag = true
+        sm.Fire(Trigger.ActivityTimerExpired);            // overlay displayed, flag = true
         sm.FirePauseForDuration(TimeSpan.FromMinutes(5)); // should reset flag, back to T_TimerRunning
 
         // Lock + L expires → should go to Idle (not Toast)
         sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         Assert.Equal(State.Idle, sm.CurrentState);
     }
@@ -509,9 +509,9 @@ public class EasyEyesStateMachineTests
         var sm = CreateMachine();
 
         sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
 
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
     }
 
@@ -523,7 +523,7 @@ public class EasyEyesStateMachineTests
         var sm = CreateMachine();
         sm.Fire(Trigger.ScreenSleep);
 
-        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
         Assert.True(sm.IsInState(State.ScreenLocked));
     }
 
@@ -534,7 +534,7 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.ScreenSleep);
 
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.SuspendTTimer), nameof(IEasyEyesActions.RestartLTimer), nameof(IEasyEyesActions.HideOverlay) },
+            new[] { nameof(IEasyEyesActions.SuspendActivityTimer), nameof(IEasyEyesActions.RestartRestTimer), nameof(IEasyEyesActions.HideOverlay) },
             _actions.Calls.ToArray()
         );
     }
@@ -543,12 +543,12 @@ public class EasyEyesStateMachineTests
     public void ScreenSleep_FromOverlayDisplayed_TransitionsTo_L_TimerRunning()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired); // → OverlayDisplayed
+        sm.Fire(Trigger.ActivityTimerExpired); // → OverlayDisplayed
         _actions.Calls.Clear();
 
         sm.Fire(Trigger.ScreenSleep);
 
-        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
         Assert.True(sm.IsInState(State.ScreenLocked));
     }
 
@@ -556,13 +556,13 @@ public class EasyEyesStateMachineTests
     public void ScreenSleep_FromOverlayDisplayed_NeverShowsToast()
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired); // overlay displayed, _wasOverlayDisplayed = true
+        sm.Fire(Trigger.ActivityTimerExpired); // overlay displayed, _wasOverlayDisplayed = true
         sm.Fire(Trigger.ScreenSleep);
 
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         Assert.Equal(State.Idle, sm.CurrentState);
-        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.NotifyUser), _actions.Calls);
     }
 
     [Fact]
@@ -572,7 +572,7 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.ScreenLock);
         sm.Fire(Trigger.ScreenSleep);
 
-        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
     }
 
     [Fact]
@@ -593,7 +593,7 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.ScreenSleep);
         sm.Fire(Trigger.ScreenWake);
 
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         Assert.True(sm.IsInState(State.ScreenUnlocked));
     }
 
@@ -607,7 +607,7 @@ public class EasyEyesStateMachineTests
         sm.Fire(Trigger.ScreenWake);
 
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.ResumeTTimer), nameof(IEasyEyesActions.StopLTimer) },
+            new[] { nameof(IEasyEyesActions.ResumeActivityTimer), nameof(IEasyEyesActions.StopRestTimer) },
             _actions.Calls.ToArray()
         );
     }
@@ -617,11 +617,11 @@ public class EasyEyesStateMachineTests
     {
         var sm = CreateMachine();
         sm.Fire(Trigger.ScreenSleep);
-        sm.Fire(Trigger.LTimerExpired); // → Idle
+        sm.Fire(Trigger.RestTimerExpired); // → Idle
 
         sm.Fire(Trigger.ScreenWake);
 
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
     }
 
     [Fact]
@@ -629,7 +629,7 @@ public class EasyEyesStateMachineTests
     {
         var sm = CreateMachine();
         sm.Fire(Trigger.ScreenWake);
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
     }
 
     [Fact]
@@ -649,15 +649,15 @@ public class EasyEyesStateMachineTests
         var sm = CreateMachine();
 
         sm.Fire(Trigger.ScreenSleep);
-        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
 
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
         Assert.Equal(State.Idle, sm.CurrentState);
 
         sm.Fire(Trigger.ScreenWake);
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
 
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
     }
 
@@ -665,25 +665,25 @@ public class EasyEyesStateMachineTests
 
     // From T_TimerRunning: unhandled triggers
     [Theory]
-    [InlineData(Trigger.LTimerExpired)]
+    [InlineData(Trigger.RestTimerExpired)]
     [InlineData(Trigger.Resume)]
     public void T_TimerRunning_InvalidTrigger_Throws(Trigger trigger)
     {
         var sm = CreateMachine();
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
 
         Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
     }
 
     // From OverlayDisplayed: TTimerExpired again is unhandled
     [Theory]
-    [InlineData(Trigger.TTimerExpired)]
-    [InlineData(Trigger.LTimerExpired)]
+    [InlineData(Trigger.ActivityTimerExpired)]
+    [InlineData(Trigger.RestTimerExpired)]
     [InlineData(Trigger.Resume)]
     public void OverlayDisplayed_InvalidTrigger_Throws(Trigger trigger)
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
 
         Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
@@ -691,30 +691,30 @@ public class EasyEyesStateMachineTests
 
     // From L_TimerRunning: unhandled triggers
     [Theory]
-    [InlineData(Trigger.TTimerExpired)]
+    [InlineData(Trigger.ActivityTimerExpired)]
     [InlineData(Trigger.PauseUntilUnlock)]
     [InlineData(Trigger.Resume)]
     public void L_TimerRunning_InvalidTrigger_Throws(Trigger trigger)
     {
         var sm = CreateMachine();
         sm.Fire(Trigger.ScreenLock);
-        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
 
         Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
     }
 
     // From ToastDisplayed: unhandled triggers
     [Theory]
-    [InlineData(Trigger.TTimerExpired)]
-    [InlineData(Trigger.LTimerExpired)]
+    [InlineData(Trigger.ActivityTimerExpired)]
+    [InlineData(Trigger.RestTimerExpired)]
     [InlineData(Trigger.PauseUntilUnlock)]
     [InlineData(Trigger.Resume)]
     public void ToastDisplayed_InvalidTrigger_Throws(Trigger trigger)
     {
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired); // → OverlayDisplayed
+        sm.Fire(Trigger.ActivityTimerExpired); // → OverlayDisplayed
         sm.Fire(Trigger.ScreenLock);    // → L_TimerRunning
-        sm.Fire(Trigger.LTimerExpired); // → ToastDisplayed
+        sm.Fire(Trigger.RestTimerExpired); // → ToastDisplayed
         Assert.Equal(State.ToastDisplayed, sm.CurrentState);
 
         Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
@@ -722,15 +722,15 @@ public class EasyEyesStateMachineTests
 
     // From Idle: unhandled triggers
     [Theory]
-    [InlineData(Trigger.TTimerExpired)]
-    [InlineData(Trigger.LTimerExpired)]
+    [InlineData(Trigger.ActivityTimerExpired)]
+    [InlineData(Trigger.RestTimerExpired)]
     [InlineData(Trigger.PauseUntilUnlock)]
     [InlineData(Trigger.Resume)]
     public void Idle_InvalidTrigger_Throws(Trigger trigger)
     {
         var sm = CreateMachine();
         sm.Fire(Trigger.ScreenLock);    // → L_TimerRunning
-        sm.Fire(Trigger.LTimerExpired); // → Idle
+        sm.Fire(Trigger.RestTimerExpired); // → Idle
         Assert.Equal(State.Idle, sm.CurrentState);
 
         Assert.Throws<InvalidOperationException>(() => sm.Fire(trigger));
@@ -766,16 +766,16 @@ public class GivenWhenThenTests
     {
         // Given: screen is locked and L expired (overlay was displayed before lock)
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);  // overlay displayed
+        sm.Fire(Trigger.ActivityTimerExpired);  // overlay displayed
         sm.Fire(Trigger.ScreenLock);     // screen locked
-        sm.Fire(Trigger.LTimerExpired);  // L expired → ToastDisplayed (hides overlay)
+        sm.Fire(Trigger.RestTimerExpired);  // L expired → ToastDisplayed (hides overlay)
         _actions.Calls.Clear();
 
         // When: screen is unlocked
         sm.Fire(Trigger.ScreenUnlock);
 
         // Then: overlay is hidden (it was already hidden on L expiry, and not re-shown)
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         Assert.DoesNotContain(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
     }
 
@@ -784,16 +784,16 @@ public class GivenWhenThenTests
     {
         // Given: overlay is displayed and screen is locked
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);  // overlay displayed
+        sm.Fire(Trigger.ActivityTimerExpired);  // overlay displayed
         sm.Fire(Trigger.ScreenLock);     // screen locked, L timer starts
         _actions.Calls.Clear();
 
         // When: L expires
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         // Then: toast is displayed
         Assert.Equal(State.ToastDisplayed, sm.CurrentState);
-        Assert.Contains(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.NotifyUser), _actions.Calls);
     }
 
     [Fact]
@@ -801,10 +801,10 @@ public class GivenWhenThenTests
     {
         // Given: T timer is running (initial state)
         var sm = CreateMachine();
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
 
         // When: T expires
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
 
         // Then: overlay is displayed
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
@@ -822,9 +822,9 @@ public class GivenWhenThenTests
         sm.Fire(Trigger.ScreenLock);
 
         // Then: T is suspended and L starts
-        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
         Assert.Equal(
-            new[] { nameof(IEasyEyesActions.SuspendTTimer), nameof(IEasyEyesActions.RestartLTimer) },
+            new[] { nameof(IEasyEyesActions.SuspendActivityTimer), nameof(IEasyEyesActions.RestartRestTimer) },
             _actions.Calls.ToArray());
     }
 
@@ -840,9 +840,9 @@ public class GivenWhenThenTests
         sm.Fire(Trigger.ScreenUnlock);
 
         // Then: T resumes and L stops
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
-        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
-        Assert.Contains(nameof(IEasyEyesActions.StopLTimer), _actions.Calls);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeActivityTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.StopRestTimer), _actions.Calls);
     }
 
     [Fact]
@@ -854,11 +854,11 @@ public class GivenWhenThenTests
         _actions.Calls.Clear();
 
         // When: L expires
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         // Then: no toast is displayed, goes to Idle
         Assert.Equal(State.Idle, sm.CurrentState);
-        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.NotifyUser), _actions.Calls);
     }
 
     // --- Quick lock/unlock scenarios ---
@@ -868,18 +868,18 @@ public class GivenWhenThenTests
     {
         // Given: overlay was displayed, then a quick lock/unlock happened (L didn't expire)
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);  // overlay displayed
+        sm.Fire(Trigger.ActivityTimerExpired);  // overlay displayed
         sm.Fire(Trigger.ScreenLock);
         sm.Fire(Trigger.ScreenUnlock);   // quick unlock before L expires
         _actions.Calls.Clear();
 
         // When: locked again and L expires
         sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         // Then: toast is displayed (overlay flag was preserved)
         Assert.Equal(State.ToastDisplayed, sm.CurrentState);
-        Assert.Contains(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.NotifyUser), _actions.Calls);
     }
 
     // --- PauseUntilUnlock scenarios ---
@@ -896,9 +896,9 @@ public class GivenWhenThenTests
         sm.Fire(Trigger.ScreenUnlock);
 
         // Then: T timer resets and resumes
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
-        Assert.Contains(nameof(IEasyEyesActions.ResetTTimer), _actions.Calls);
-        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ResetActivityTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeActivityTimer), _actions.Calls);
     }
 
     [Fact]
@@ -930,14 +930,14 @@ public class GivenWhenThenTests
         sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
 
         // Then: suspends T, hides overlay, extends T, resumes T
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         Assert.Equal(
             new[]
             {
-                nameof(IEasyEyesActions.SuspendTTimer),
+                nameof(IEasyEyesActions.SuspendActivityTimer),
                 nameof(IEasyEyesActions.HideOverlay),
-                nameof(IEasyEyesActions.ExtendTTimer),
-                nameof(IEasyEyesActions.ResumeTTimer),
+                nameof(IEasyEyesActions.ExtendActivityTimer),
+                nameof(IEasyEyesActions.ResumeActivityTimer),
             },
             _actions.Calls.ToArray());
     }
@@ -947,17 +947,17 @@ public class GivenWhenThenTests
     {
         // Given: overlay is displayed
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         _actions.Calls.Clear();
 
         // When: pause for duration
         sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
 
         // Then: overlay is hidden, T is extended, state returns to T_TimerRunning
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         Assert.Contains(nameof(IEasyEyesActions.HideOverlay), _actions.Calls);
-        Assert.Contains(nameof(IEasyEyesActions.ExtendTTimer), _actions.Calls);
-        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.ExtendActivityTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeActivityTimer), _actions.Calls);
     }
 
     [Fact]
@@ -965,16 +965,16 @@ public class GivenWhenThenTests
     {
         // Given: overlay was displayed, then pause for duration (clears overlay flag)
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
 
         // When: locked and L expires
         sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         // Then: no toast (overlay flag was cleared by pause for duration)
         Assert.Equal(State.Idle, sm.CurrentState);
-        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.NotifyUser), _actions.Calls);
     }
 
     // --- Screen sleep scenarios ---
@@ -984,16 +984,16 @@ public class GivenWhenThenTests
     {
         // Given: overlay is displayed
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         _actions.Calls.Clear();
 
         // When: screen sleeps
         sm.Fire(Trigger.ScreenSleep);
 
         // Then: overlay is hidden and L timer starts
-        Assert.Equal(State.L_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
         Assert.Contains(nameof(IEasyEyesActions.HideOverlay), _actions.Calls);
-        Assert.Contains(nameof(IEasyEyesActions.RestartLTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.RestartRestTimer), _actions.Calls);
     }
 
     [Fact]
@@ -1001,15 +1001,15 @@ public class GivenWhenThenTests
     {
         // Given: overlay was displayed but screen went to sleep
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);  // overlay displayed
+        sm.Fire(Trigger.ActivityTimerExpired);  // overlay displayed
         sm.Fire(Trigger.ScreenSleep);    // screen sleeps
 
         // When: L expires
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
 
         // Then: no toast (sleep doesn't count as a deliberate rest)
         Assert.Equal(State.Idle, sm.CurrentState);
-        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowToast), _actions.Calls);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.NotifyUser), _actions.Calls);
     }
 
     [Fact]
@@ -1024,9 +1024,9 @@ public class GivenWhenThenTests
         sm.Fire(Trigger.ScreenWake);
 
         // Then: T resumes and L stops
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
-        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
-        Assert.Contains(nameof(IEasyEyesActions.StopLTimer), _actions.Calls);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeActivityTimer), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.StopRestTimer), _actions.Calls);
     }
 
     // --- Full cycle scenarios ---
@@ -1038,15 +1038,15 @@ public class GivenWhenThenTests
         var sm = CreateMachine();
 
         // When: T expires → overlay → lock → L expires (rest completed) → unlock
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         sm.Fire(Trigger.ScreenLock);
-        sm.Fire(Trigger.LTimerExpired);
+        sm.Fire(Trigger.RestTimerExpired);
         _actions.Calls.Clear();
         sm.Fire(Trigger.ScreenUnlock);
 
         // Then: T restarts (was reset during L expiry)
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
-        Assert.Contains(nameof(IEasyEyesActions.ResumeTTimer), _actions.Calls);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ResumeActivityTimer), _actions.Calls);
     }
 
     [Fact]
@@ -1054,7 +1054,7 @@ public class GivenWhenThenTests
     {
         // Given: T has expired and the overlay is displayed
         var sm = CreateMachine();
-        sm.Fire(Trigger.TTimerExpired);
+        sm.Fire(Trigger.ActivityTimerExpired);
         _actions.Calls.Clear();
 
         // When: user pauses for X minutes
@@ -1062,7 +1062,7 @@ public class GivenWhenThenTests
         sm.FirePauseForDuration(pauseDuration);
 
         // Then: overlay is hidden and T is set to X
-        Assert.Equal(State.T_TimerRunning, sm.CurrentState);
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         Assert.Contains(nameof(IEasyEyesActions.HideOverlay), _actions.Calls);
         Assert.Equal(pauseDuration, _actions.LastExtendTTimerDuration);
     }
@@ -1080,22 +1080,22 @@ public class EasyEyesActionsTests
         var tScheduler = new FakeTimerScheduler();
         var actions = new EasyEyesActions(
             fakeTime,
-            tScheduler: tScheduler,
-            lScheduler: new FakeTimerScheduler(),
-            tDuration: tDuration,
-            lDuration: TimeSpan.FromMinutes(5),
+            activityScheduler: tScheduler,
+            restScheduler: new FakeTimerScheduler(),
+            activityDuration: tDuration,
+            restDuration: TimeSpan.FromMinutes(5),
             showOverlay: () => { },
             hideOverlay: () => { },
             showToast: () => { },
             fireTrigger: _ => { });
 
-        actions.StartTTimer();
+        actions.StartActivityTimer();
         fakeTime.Advance(tDuration + TimeSpan.FromSeconds(1));
-        actions.SuspendTTimer(); // _tRemaining clamps to Zero
+        actions.SuspendActivityTimer(); // _tRemaining clamps to Zero
 
         // When: ExtendTTimer is called with a duration shorter than the original tDuration
         var pauseDuration = TimeSpan.FromMinutes(15);
-        actions.ExtendTTimer(pauseDuration);
+        actions.ExtendActivityTimer(pauseDuration);
 
         // Then: T remaining is set to the requested duration, not the original 20 minutes
         Assert.Equal(pauseDuration, actions.GetTRemaining());

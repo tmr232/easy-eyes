@@ -5,11 +5,11 @@ namespace EasyEyes;
 public enum State
 {
     // ScreenUnlocked substates
-    T_TimerRunning,
+    ActivityTimerRunning,
     OverlayDisplayed,
 
     // ScreenLocked substates
-    L_TimerRunning,
+    RestTimerRunning,
     ToastDisplayed,
     Idle,
 
@@ -27,8 +27,8 @@ public enum Trigger
     ScreenUnlock,
     ScreenSleep,
     ScreenWake,
-    TTimerExpired,
-    LTimerExpired,
+    ActivityTimerExpired,
+    RestTimerExpired,
     Resume,
     PauseUntilUnlock,
     PauseForDuration,
@@ -38,14 +38,14 @@ public interface IEasyEyesActions
 {
     void ShowOverlay();
     void HideOverlay();
-    void ShowToast();
+    void NotifyUser();
 
-    void SuspendTTimer();
-    void ResumeTTimer();
-    void ResetTTimer();
-    void RestartLTimer();
-    void StopLTimer();
-    void ExtendTTimer(TimeSpan duration);
+    void SuspendActivityTimer();
+    void ResumeActivityTimer();
+    void ResetActivityTimer();
+    void RestartRestTimer();
+    void StopRestTimer();
+    void ExtendActivityTimer(TimeSpan duration);
 }
 
 public class EasyEyesStateMachine
@@ -63,7 +63,7 @@ public class EasyEyesStateMachine
     public EasyEyesStateMachine(IEasyEyesActions actions)
     {
         _actions = actions;
-        _machine = new StateMachine<State, Trigger>(State.T_TimerRunning);
+        _machine = new StateMachine<State, Trigger>(State.ActivityTimerRunning);
         _pauseForDurationTrigger = _machine.SetTriggerParameters<TimeSpan>(Trigger.PauseForDuration);
 
         ConfigureStates();
@@ -73,28 +73,28 @@ public class EasyEyesStateMachine
     {
         // Superstate: ScreenUnlocked
         _machine.Configure(State.ScreenUnlocked)
-            .Permit(Trigger.ScreenLock, State.L_TimerRunning)
-            .Permit(Trigger.ScreenSleep, State.L_TimerRunning)
+            .Permit(Trigger.ScreenLock, State.RestTimerRunning)
+            .Permit(Trigger.ScreenSleep, State.RestTimerRunning)
             .Permit(Trigger.PauseUntilUnlock, State.PausedUntilUnlock)
             .Ignore(Trigger.ScreenUnlock)
             .Ignore(Trigger.ScreenWake);
 
         // Superstate: ScreenLocked
         _machine.Configure(State.ScreenLocked)
-            .Permit(Trigger.ScreenUnlock, State.T_TimerRunning)
-            .Permit(Trigger.ScreenWake, State.T_TimerRunning)
+            .Permit(Trigger.ScreenUnlock, State.ActivityTimerRunning)
+            .Permit(Trigger.ScreenWake, State.ActivityTimerRunning)
             .Ignore(Trigger.ScreenLock)
             .Ignore(Trigger.ScreenSleep);
 
         // ScreenUnlocked substates
-        _machine.Configure(State.T_TimerRunning)
+        _machine.Configure(State.ActivityTimerRunning)
             .SubstateOf(State.ScreenUnlocked)
-            .Permit(Trigger.TTimerExpired, State.OverlayDisplayed)
+            .Permit(Trigger.ActivityTimerExpired, State.OverlayDisplayed)
             .PermitReentry(Trigger.PauseForDuration);
 
         _machine.Configure(State.OverlayDisplayed)
             .SubstateOf(State.ScreenUnlocked)
-            .Permit(Trigger.PauseForDuration, State.T_TimerRunning)
+            .Permit(Trigger.PauseForDuration, State.ActivityTimerRunning)
             .OnEntry(() =>
             {
                 _wasOverlayDisplayed = true;
@@ -102,87 +102,87 @@ public class EasyEyesStateMachine
             });
 
         // ScreenLocked substates
-        _machine.Configure(State.L_TimerRunning)
+        _machine.Configure(State.RestTimerRunning)
             .SubstateOf(State.ScreenLocked)
             .OnEntryFrom(Trigger.ScreenLock, () =>
             {
                 _wasScreenSleep = false;
-                _actions.SuspendTTimer();
-                _actions.RestartLTimer();
+                _actions.SuspendActivityTimer();
+                _actions.RestartRestTimer();
             })
             .OnEntryFrom(Trigger.ScreenSleep, () =>
             {
                 _wasScreenSleep = true;
-                _actions.SuspendTTimer();
-                _actions.RestartLTimer();
+                _actions.SuspendActivityTimer();
+                _actions.RestartRestTimer();
                 _actions.HideOverlay();
             })
-            .PermitIf(Trigger.LTimerExpired, State.ToastDisplayed, () => _wasOverlayDisplayed && !_wasScreenSleep)
-            .PermitIf(Trigger.LTimerExpired, State.Idle, () => !_wasOverlayDisplayed || _wasScreenSleep);
+            .PermitIf(Trigger.RestTimerExpired, State.ToastDisplayed, () => _wasOverlayDisplayed && !_wasScreenSleep)
+            .PermitIf(Trigger.RestTimerExpired, State.Idle, () => !_wasOverlayDisplayed || _wasScreenSleep);
 
         _machine.Configure(State.ToastDisplayed)
             .SubstateOf(State.ScreenLocked)
             .OnEntry(() =>
             {
-                _actions.ResetTTimer();
+                _actions.ResetActivityTimer();
                 _actions.HideOverlay();
                 _wasOverlayDisplayed = false;
-                _actions.ShowToast();
+                _actions.NotifyUser();
             });
 
         _machine.Configure(State.Idle)
             .SubstateOf(State.ScreenLocked)
             .OnEntry(() =>
             {
-                _actions.ResetTTimer();
+                _actions.ResetActivityTimer();
                 _actions.HideOverlay();
                 _wasOverlayDisplayed = false;
             });
 
         // T_TimerRunning entry from various triggers
-        _machine.Configure(State.T_TimerRunning)
+        _machine.Configure(State.ActivityTimerRunning)
             .OnEntryFrom(Trigger.ScreenUnlock, () =>
             {
-                _actions.ResumeTTimer();
-                _actions.StopLTimer();
+                _actions.ResumeActivityTimer();
+                _actions.StopRestTimer();
             })
             .OnEntryFrom(Trigger.ScreenWake, () =>
             {
-                _actions.ResumeTTimer();
-                _actions.StopLTimer();
+                _actions.ResumeActivityTimer();
+                _actions.StopRestTimer();
             })
             .OnEntryFrom(Trigger.Resume, () =>
             {
-                _actions.ResumeTTimer();
+                _actions.ResumeActivityTimer();
             })
             .OnEntryFrom(_pauseForDurationTrigger, (duration) =>
             {
-                _actions.SuspendTTimer();
+                _actions.SuspendActivityTimer();
                 _actions.HideOverlay();
                 _wasOverlayDisplayed = false;
-                _actions.ExtendTTimer(duration);
-                _actions.ResumeTTimer();
+                _actions.ExtendActivityTimer(duration);
+                _actions.ResumeActivityTimer();
             });
 
         // PausedUntilUnlock
         _machine.Configure(State.PausedUntilUnlock)
             .OnEntry(() =>
             {
-                _actions.SuspendTTimer();
+                _actions.SuspendActivityTimer();
                 _actions.HideOverlay();
                 _wasOverlayDisplayed = false;
             })
             .OnExit(() =>
             {
-                _actions.ResetTTimer();
+                _actions.ResetActivityTimer();
             })
-            .Permit(Trigger.ScreenUnlock, State.T_TimerRunning)
-            .Permit(Trigger.Resume, State.T_TimerRunning)
+            .Permit(Trigger.ScreenUnlock, State.ActivityTimerRunning)
+            .Permit(Trigger.Resume, State.ActivityTimerRunning)
             .Ignore(Trigger.ScreenLock)
             .Ignore(Trigger.ScreenSleep)
             .Ignore(Trigger.ScreenWake)
-            .Ignore(Trigger.TTimerExpired)
-            .Ignore(Trigger.LTimerExpired);
+            .Ignore(Trigger.ActivityTimerExpired)
+            .Ignore(Trigger.RestTimerExpired);
     }
 
     public void Fire(Trigger trigger) => _machine.Fire(trigger);
