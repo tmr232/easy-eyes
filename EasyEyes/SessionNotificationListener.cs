@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Windows;
 using System.Windows.Interop;
 
 namespace EasyEyes;
@@ -35,7 +36,7 @@ public sealed class SessionNotificationListener : IDisposable
         public byte Data;
     }
 
-    private readonly HwndSource _hwndSource;
+    private readonly IntPtr _hwnd;
     private readonly IntPtr _powerNotification;
 
     public event EventHandler? SessionLocked;
@@ -43,21 +44,15 @@ public sealed class SessionNotificationListener : IDisposable
     public event EventHandler? DisplayOff;
     public event EventHandler? DisplayOn;
 
-    public SessionNotificationListener()
+    public SessionNotificationListener(Window window)
     {
-        _hwndSource = new HwndSource(new HwndSourceParameters("EasyEyes-SessionListener")
-        {
-            Width = 0,
-            Height = 0,
-            WindowStyle = 0,
-        });
-        _hwndSource.AddHook(WndProc);
-
-        var hwnd = _hwndSource.Handle;
-        WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION);
+        _hwnd = new WindowInteropHelper(window).Handle;
+        var source = HwndSource.FromHwnd(_hwnd);
+        source?.AddHook(WndProc);
+        WTSRegisterSessionNotification(_hwnd, NOTIFY_FOR_THIS_SESSION);
 
         var guid = GUID_CONSOLE_DISPLAY_STATE;
-        _powerNotification = RegisterPowerSettingNotification(hwnd, ref guid, 0);
+        _powerNotification = RegisterPowerSettingNotification(_hwnd, ref guid, 0);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -92,9 +87,8 @@ public sealed class SessionNotificationListener : IDisposable
 
     public void Dispose()
     {
-        WTSUnRegisterSessionNotification(_hwndSource.Handle);
+        WTSUnRegisterSessionNotification(_hwnd);
         if (_powerNotification != IntPtr.Zero)
             UnregisterPowerSettingNotification(_powerNotification);
-        _hwndSource.Dispose();
     }
 }
