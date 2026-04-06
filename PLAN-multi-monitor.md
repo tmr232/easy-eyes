@@ -4,7 +4,7 @@
 
 - [x] **1. Extract `OverlayWindow` class** — a lightweight WPF window that owns its own `Rectangle`, `RadialGradientBrush` spotlight mask, fade animation, and cursor tracking. Sized/positioned to exactly one monitor.
 
-- [ ] **2. Create `OverlayManager`** — responsible for:
+- [x] **2. Create `OverlayManager`** — responsible for:
 
   - Enumerating screens via `System.Windows.Forms.Screen.AllScreens`
   - Creating/destroying `OverlayWindow` instances to match the current set of screens

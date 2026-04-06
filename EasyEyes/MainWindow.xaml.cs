@@ -18,7 +18,7 @@ public partial class MainWindow : Window
     private bool _pauseMediaOnLock = true;
     private readonly EasyEyesStateMachine _stateMachine;
     private readonly EasyEyesActions _actions;
-    private readonly List<OverlayWindow> _overlayWindows = [];
+    private readonly OverlayManager _overlayManager = new();
 
     public MainWindow()
     {
@@ -50,32 +50,20 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        CreateOverlayWindows();
+        _overlayManager.CreateWindows();
         _actions.StartActivityTimer();
-    }
-
-    private void CreateOverlayWindows()
-    {
-        foreach (var screen in Forms.Screen.AllScreens)
-        {
-            var overlay = new OverlayWindow(screen);
-            overlay.Show();
-            _overlayWindows.Add(overlay);
-        }
     }
 
     private void DoShowOverlay()
     {
         App.Log("DoShowOverlay");
-        foreach (var overlay in _overlayWindows)
-            overlay.ShowOverlay();
+        _overlayManager.ShowAll();
     }
 
     private void DoHideOverlay()
     {
         App.Log("DoHideOverlay");
-        foreach (var overlay in _overlayWindows)
-            overlay.HideOverlay();
+        _overlayManager.HideAll();
     }
 
     private void InitializeTrayIcon()
@@ -226,9 +214,7 @@ public partial class MainWindow : Window
     {
         App.Log($"MainWindow OnClosed, State={_stateMachine.CurrentState}");
         _sessionListener?.Dispose();
-        foreach (var overlay in _overlayWindows)
-            overlay.Close();
-        _overlayWindows.Clear();
+        _overlayManager.Dispose();
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
         base.OnClosed(e);
