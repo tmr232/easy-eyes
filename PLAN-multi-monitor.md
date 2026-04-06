@@ -17,4 +17,11 @@
 
 - [x] **5. Win32 styles** — `WS_EX_TRANSPARENT`, `WS_EX_NOACTIVATE`, etc. and the 1px height trick apply to each `OverlayWindow` individually.
 
-- [x] **6. Remove `MainWindow` entirely** — move the tray icon, session listener, state machine, and media-pause logic into `App` (or a dedicated non-visual host class), eliminating the need for a hidden window. `App.OnStartup` becomes the entry point for wiring everything together, and `OverlayManager` owns all the windows.
+- ~~**6. Remove `MainWindow` entirely**~~ — **Decided against.** Moving
+  everything into `App` would turn it into a god class mixing lifecycle
+  concerns (mutex, logging, error handling) with app logic (tray, state
+  machine, session listener). Keeping `MainWindow` as a non-visual host
+  preserves separation of concerns and is idiomatic WPF (hidden
+  message-only windows are a well-understood pattern).
+  `SessionNotificationListener` also already relies on a `Window` handle,
+  so this avoids adding an extra `HwndSource`.
