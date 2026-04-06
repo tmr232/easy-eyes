@@ -17,4 +17,4 @@
 
 - [x] **5. Win32 styles** — `WS_EX_TRANSPARENT`, `WS_EX_NOACTIVATE`, etc. and the 1px height trick apply to each `OverlayWindow` individually.
 
-- [ ] **6. Remove `MainWindow` entirely** — move the tray icon, session listener, state machine, and media-pause logic into `App` (or a dedicated non-visual host class), eliminating the need for a hidden window. `App.OnStartup` becomes the entry point for wiring everything together, and `OverlayManager` owns all the windows.
+- [x] **6. Remove `MainWindow` entirely** — move the tray icon, session listener, state machine, and media-pause logic into `App` (or a dedicated non-visual host class), eliminating the need for a hidden window. `App.OnStartup` becomes the entry point for wiring everything together, and `OverlayManager` owns all the windows.
