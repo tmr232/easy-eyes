@@ -1,11 +1,8 @@
 using System;
 using System.Drawing;
 using System.Media;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
 using Windows.Media.Control;
 using Forms = System.Windows.Forms;
 
@@ -13,55 +10,18 @@ namespace EasyEyes;
 
 public partial class MainWindow : Window
 {
-    private const int GWL_EXSTYLE = -20;
-    private const int WS_EX_TRANSPARENT = 0x00000020;
-    private const int WS_EX_LAYERED = 0x00080000;
-    private const int WS_EX_TOOLWINDOW = 0x00000080;
-    private const int WS_EX_NOACTIVATE = 0x08000000;
-
-    private const double SpotlightRadius = 200;
-
-    [DllImport("user32.dll")]
-    private static extern int GetWindowLong(IntPtr hwnd, int index);
-
-    [DllImport("user32.dll")]
-    private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCursorPos(out POINT lpPoint);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-    }
-
     private SessionNotificationListener? _sessionListener;
     private Forms.NotifyIcon _trayIcon = null!;
     private Forms.ToolStripLabel _activityTimeRemainingLabel = null!;
     private Forms.ToolStripMenuItem _pauseUntilUnlockItem = null!;
     private Forms.ToolStripMenuItem _pauseForItem = null!;
     private bool _pauseMediaOnLock = true;
-    private readonly RadialGradientBrush _spotlightMask;
     private readonly EasyEyesStateMachine _stateMachine;
     private readonly EasyEyesActions _actions;
+    private readonly List<OverlayWindow> _overlayWindows = [];
 
     public MainWindow()
     {
-        _spotlightMask = new RadialGradientBrush
-        {
-            MappingMode = BrushMappingMode.Absolute,
-            RadiusX = SpotlightRadius,
-            RadiusY = SpotlightRadius,
-            GradientStops =
-            {
-                new GradientStop(Colors.Transparent, 0.0),
-                new GradientStop(Colors.White, 1.0)
-            }
-        };
-
         EasyEyesStateMachine? stateMachine = null;
         _actions = new EasyEyesActions(
             TimeProvider.System,
@@ -83,47 +43,39 @@ public partial class MainWindow : Window
         _stateMachine = stateMachine;
 
         InitializeComponent();
-        Overlay.OpacityMask = _spotlightMask;
-        Overlay.Opacity = 0;
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
         InitializeTrayIcon();
-        CompositionTarget.Rendering += OnRendering;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        // Cover the virtual screen but leave 1px uncovered so Windows
-        // doesn't treat this as a fullscreen app and hide the taskbar.
-        Left = SystemParameters.VirtualScreenLeft;
-        Top = SystemParameters.VirtualScreenTop;
-        Width = SystemParameters.VirtualScreenWidth;
-        Height = SystemParameters.VirtualScreenHeight - 1;
-
+        CreateOverlayWindows();
         _actions.StartActivityTimer();
     }
 
-    private void OnRendering(object? sender, EventArgs e)
+    private void CreateOverlayWindows()
     {
-        if (!GetCursorPos(out var pt)) return;
-
-        var wpfPoint = PointFromScreen(new System.Windows.Point(pt.X, pt.Y));
-        _spotlightMask.Center = wpfPoint;
-        _spotlightMask.GradientOrigin = wpfPoint;
+        foreach (var screen in Forms.Screen.AllScreens)
+        {
+            var overlay = new OverlayWindow(screen);
+            overlay.Show();
+            _overlayWindows.Add(overlay);
+        }
     }
 
     private void DoShowOverlay()
     {
         App.Log("DoShowOverlay");
-        var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromSeconds(5));
-        Overlay.BeginAnimation(OpacityProperty, fadeIn);
+        foreach (var overlay in _overlayWindows)
+            overlay.ShowOverlay();
     }
 
     private void DoHideOverlay()
     {
         App.Log("DoHideOverlay");
-        Overlay.BeginAnimation(OpacityProperty, null);
-        Overlay.Opacity = 0;
+        foreach (var overlay in _overlayWindows)
+            overlay.HideOverlay();
     }
 
     private void InitializeTrayIcon()
@@ -221,8 +173,6 @@ public partial class MainWindow : Window
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-
         _sessionListener = new SessionNotificationListener(this);
         _sessionListener.SessionLocked += (_, _) =>
         {
@@ -246,9 +196,6 @@ public partial class MainWindow : Window
             App.Log($"DisplayOn, State={_stateMachine.CurrentState}");
             _stateMachine.Fire(Trigger.ScreenWake);
         };
-
-        int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        _ = SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
     }
 
     private async void PauseMediaIfEnabled()
@@ -279,7 +226,9 @@ public partial class MainWindow : Window
     {
         App.Log($"MainWindow OnClosed, State={_stateMachine.CurrentState}");
         _sessionListener?.Dispose();
-        CompositionTarget.Rendering -= OnRendering;
+        foreach (var overlay in _overlayWindows)
+            overlay.Close();
+        _overlayWindows.Clear();
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
         base.OnClosed(e);
