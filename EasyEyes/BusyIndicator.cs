@@ -40,6 +40,11 @@ public class BusyIndicator
     public bool IsEnabled => _enabled;
 
     /// <summary>
+    /// Fires when the indicator transitions from inactive to active.
+    /// </summary>
+    public event EventHandler? BecameActive;
+
+    /// <summary>
     /// Fires when the indicator transitions from active to inactive
     /// (i.e., when the grace period expires and the indicator auto-disables).
     /// </summary>
@@ -85,6 +90,8 @@ public class BusyIndicator
         _enabled = true;
         Subscribe();
         IsActive = _isStateActive();
+        if (IsActive)
+            BecameActive?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -128,7 +135,10 @@ public class BusyIndicator
             return;
 
         _graceScheduler.Cancel();
+        var wasPreviouslyActive = IsActive;
         IsActive = true;
+        if (!wasPreviouslyActive)
+            BecameActive?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnDeactivated(object? sender, EventArgs e)

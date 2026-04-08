@@ -7,14 +7,14 @@ namespace EasyEyes;
 /// </summary>
 /// <remarks>
 /// The mic/camera indicator is exposed as a single user-facing toggle
-/// but internally uses two <see cref="BusyIndicator"/> instances (one for
-/// camera, one for mic). Either device being in use keeps the indicator
-/// active.
+/// but internally uses two <see cref="ActivationWindowIndicator"/> instances
+/// (one for camera, one for mic). Either device being in use keeps the
+/// indicator active.
 /// </remarks>
 public class BusyIndicatorManager
 {
-    private readonly BusyIndicator _cameraIndicator;
-    private readonly BusyIndicator _microphoneIndicator;
+    private readonly ActivationWindowIndicator _cameraIndicator;
+    private readonly ActivationWindowIndicator _microphoneIndicator;
 
     /// <summary>
     /// True if any enabled indicator is currently active.
@@ -32,6 +32,12 @@ public class BusyIndicatorManager
     public event EventHandler? BusyCleared;
 
     /// <summary>
+    /// Fires when the activation window expires without mic or camera
+    /// becoming active. The indicator has been auto-disabled.
+    /// </summary>
+    public event EventHandler? ActivationExpired;
+
+    /// <summary>
     /// Creates a manager wired to a <see cref="MediaDeviceMonitor"/> for
     /// camera and microphone monitoring.
     /// </summary>
@@ -39,24 +45,33 @@ public class BusyIndicatorManager
         MediaDeviceMonitor monitor,
         ITimerScheduler cameraGraceScheduler,
         ITimerScheduler microphoneGraceScheduler,
-        TimeSpan gracePeriod)
+        TimeSpan gracePeriod,
+        ITimerScheduler cameraActivationScheduler,
+        ITimerScheduler microphoneActivationScheduler,
+        TimeSpan activationWindow)
         : this(
-            new BusyIndicator(
-                isStateActive: () => MediaDeviceMonitor.IsCameraInUse,
-                subscribeActivated: h => monitor.CameraActivated += h,
-                unsubscribeActivated: h => monitor.CameraActivated -= h,
-                subscribeDeactivated: h => monitor.CameraDeactivated += h,
-                unsubscribeDeactivated: h => monitor.CameraDeactivated -= h,
-                graceScheduler: cameraGraceScheduler,
-                gracePeriod: gracePeriod),
-            new BusyIndicator(
-                isStateActive: () => MediaDeviceMonitor.IsMicrophoneInUse,
-                subscribeActivated: h => monitor.MicrophoneActivated += h,
-                unsubscribeActivated: h => monitor.MicrophoneActivated -= h,
-                subscribeDeactivated: h => monitor.MicrophoneDeactivated += h,
-                unsubscribeDeactivated: h => monitor.MicrophoneDeactivated -= h,
-                graceScheduler: microphoneGraceScheduler,
-                gracePeriod: gracePeriod))
+            new ActivationWindowIndicator(
+                new BusyIndicator(
+                    isStateActive: () => MediaDeviceMonitor.IsCameraInUse,
+                    subscribeActivated: h => monitor.CameraActivated += h,
+                    unsubscribeActivated: h => monitor.CameraActivated -= h,
+                    subscribeDeactivated: h => monitor.CameraDeactivated += h,
+                    unsubscribeDeactivated: h => monitor.CameraDeactivated -= h,
+                    graceScheduler: cameraGraceScheduler,
+                    gracePeriod: gracePeriod),
+                cameraActivationScheduler,
+                activationWindow),
+            new ActivationWindowIndicator(
+                new BusyIndicator(
+                    isStateActive: () => MediaDeviceMonitor.IsMicrophoneInUse,
+                    subscribeActivated: h => monitor.MicrophoneActivated += h,
+                    unsubscribeActivated: h => monitor.MicrophoneActivated -= h,
+                    subscribeDeactivated: h => monitor.MicrophoneDeactivated += h,
+                    unsubscribeDeactivated: h => monitor.MicrophoneDeactivated -= h,
+                    graceScheduler: microphoneGraceScheduler,
+                    gracePeriod: gracePeriod),
+                microphoneActivationScheduler,
+                activationWindow))
     {
     }
 
@@ -64,14 +79,16 @@ public class BusyIndicatorManager
     /// Creates a manager with pre-built indicators (for testing).
     /// </summary>
     public BusyIndicatorManager(
-        BusyIndicator cameraIndicator,
-        BusyIndicator microphoneIndicator)
+        ActivationWindowIndicator cameraIndicator,
+        ActivationWindowIndicator microphoneIndicator)
     {
         _cameraIndicator = cameraIndicator;
         _microphoneIndicator = microphoneIndicator;
 
         _cameraIndicator.Cleared += OnIndicatorCleared;
         _microphoneIndicator.Cleared += OnIndicatorCleared;
+        _cameraIndicator.ActivationExpired += OnActivationExpired;
+        _microphoneIndicator.ActivationExpired += OnActivationExpired;
     }
 
     /// <summary>
@@ -100,5 +117,11 @@ public class BusyIndicatorManager
     {
         if (!IsBusy)
             BusyCleared?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnActivationExpired(object? sender, EventArgs e)
+    {
+        if (!IsMicCameraEnabled)
+            ActivationExpired?.Invoke(this, EventArgs.Empty);
     }
 }
