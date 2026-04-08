@@ -7,6 +7,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+### Added
+
+- Add `MediaPlaybackMonitor` for detecting system media playback via Windows SMTC API
+
 ## [2026.04.02]
 
 ### Fixed
