@@ -63,7 +63,7 @@ public partial class MainWindow : Window
             _trayIcon.ShowBalloonTip(
                 3000,
                 "Easy Eyes",
-                "Mic/Camera indicator disabled — no activity detected.",
+                "\"In a meeting\" indicator disabled — no active meeting detected.",
                 Forms.ToolTipIcon.Info);
         };
 
@@ -132,7 +132,7 @@ public partial class MainWindow : Window
 
         menu.Items.Add(new Forms.ToolStripSeparator());
 
-        _micCameraItem = new Forms.ToolStripMenuItem("Mic / Camera active")
+        _micCameraItem = new Forms.ToolStripMenuItem("In a meeting (busy)")
         {
             CheckOnClick = true,
             Checked = false
