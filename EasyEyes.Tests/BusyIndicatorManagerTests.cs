@@ -14,28 +14,38 @@ public class BusyIndicatorManagerTests
     private event EventHandler? MicActivated;
     private event EventHandler? MicDeactivated;
 
+    private static readonly TimeSpan ActivationWindow = TimeSpan.FromSeconds(30);
+
     private readonly FakeTimerScheduler _cameraGrace = new();
     private readonly FakeTimerScheduler _micGrace = new();
+    private readonly FakeTimerScheduler _cameraActivation = new();
+    private readonly FakeTimerScheduler _micActivation = new();
 
     private BusyIndicatorManager CreateManager()
     {
-        var camera = new BusyIndicator(
-            isStateActive: () => _cameraActive,
-            subscribeActivated: h => CameraActivated += h,
-            unsubscribeActivated: h => CameraActivated -= h,
-            subscribeDeactivated: h => CameraDeactivated += h,
-            unsubscribeDeactivated: h => CameraDeactivated -= h,
-            graceScheduler: _cameraGrace,
-            gracePeriod: GracePeriod);
+        var camera = new ActivationWindowIndicator(
+            new BusyIndicator(
+                isStateActive: () => _cameraActive,
+                subscribeActivated: h => CameraActivated += h,
+                unsubscribeActivated: h => CameraActivated -= h,
+                subscribeDeactivated: h => CameraDeactivated += h,
+                unsubscribeDeactivated: h => CameraDeactivated -= h,
+                graceScheduler: _cameraGrace,
+                gracePeriod: GracePeriod),
+            _cameraActivation,
+            ActivationWindow);
 
-        var mic = new BusyIndicator(
-            isStateActive: () => _micActive,
-            subscribeActivated: h => MicActivated += h,
-            unsubscribeActivated: h => MicActivated -= h,
-            subscribeDeactivated: h => MicDeactivated += h,
-            unsubscribeDeactivated: h => MicDeactivated -= h,
-            graceScheduler: _micGrace,
-            gracePeriod: GracePeriod);
+        var mic = new ActivationWindowIndicator(
+            new BusyIndicator(
+                isStateActive: () => _micActive,
+                subscribeActivated: h => MicActivated += h,
+                unsubscribeActivated: h => MicActivated -= h,
+                subscribeDeactivated: h => MicDeactivated += h,
+                unsubscribeDeactivated: h => MicDeactivated -= h,
+                graceScheduler: _micGrace,
+                gracePeriod: GracePeriod),
+            _micActivation,
+            ActivationWindow);
 
         return new BusyIndicatorManager(camera, mic);
     }
@@ -231,6 +241,39 @@ public class BusyIndicatorManagerTests
 
         SimulateMicActivated();
 
+        Assert.True(manager.IsBusy);
+    }
+
+    // --- Activation window ---
+
+    [Fact]
+    public void Given_EnabledWithNothingActive_When_BothActivationWindowsExpire_Then_ActivationExpiredFires()
+    {
+        var manager = CreateManager();
+        var expired = false;
+        manager.ActivationExpired += (_, _) => expired = true;
+        manager.EnableMicCamera();
+
+        _cameraActivation.Expire();
+        Assert.False(expired);
+
+        _micActivation.Expire();
+        Assert.True(expired);
+        Assert.False(manager.IsMicCameraEnabled);
+    }
+
+    [Fact]
+    public void Given_EnabledWithNothingActive_When_MicActivatesBeforeWindow_Then_NoActivationExpired()
+    {
+        var manager = CreateManager();
+        var expired = false;
+        manager.ActivationExpired += (_, _) => expired = true;
+        manager.EnableMicCamera();
+
+        SimulateMicActivated();
+        _cameraActivation.Expire();
+
+        Assert.False(expired);
         Assert.True(manager.IsBusy);
     }
 }

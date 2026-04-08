@@ -49,10 +49,22 @@ public partial class MainWindow : Window
             _mediaDeviceMonitor,
             cameraGraceScheduler: new DispatcherTimerScheduler(),
             microphoneGraceScheduler: new DispatcherTimerScheduler(),
-            gracePeriod: TimeSpan.FromSeconds(5));
+            gracePeriod: TimeSpan.FromSeconds(5),
+            cameraActivationScheduler: new DispatcherTimerScheduler(),
+            microphoneActivationScheduler: new DispatcherTimerScheduler(),
+            activationWindow: TimeSpan.FromSeconds(30));
         _busyIndicatorManager.BusyCleared += (_, _) =>
         {
             _micCameraItem.Checked = false;
+        };
+        _busyIndicatorManager.ActivationExpired += (_, _) =>
+        {
+            _micCameraItem.Checked = false;
+            _trayIcon.ShowBalloonTip(
+                3000,
+                "Easy Eyes",
+                "Mic/Camera indicator disabled — no activity detected.",
+                Forms.ToolTipIcon.Info);
         };
 
         InitializeComponent();
