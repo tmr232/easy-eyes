@@ -18,6 +18,11 @@
     <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 
+  <!-- Exclude WIP file that uses a different enum scheme and doesn't compile -->
+  <ItemGroup>
+    <Compile Remove="NewStateMachine.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="Resources\tray.ico">
       <LogicalName>tray.ico</LogicalName>
