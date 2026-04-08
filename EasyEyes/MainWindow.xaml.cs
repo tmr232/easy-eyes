@@ -19,6 +19,9 @@ public partial class MainWindow : Window
     private readonly EasyEyesStateMachine _stateMachine;
     private readonly EasyEyesActions _actions;
     private readonly OverlayManager _overlayManager = new();
+    private readonly MediaDeviceMonitor _mediaDeviceMonitor = new(TimeSpan.FromSeconds(1));
+    private readonly BusyIndicatorManager _busyIndicatorManager;
+    private Forms.ToolStripMenuItem _micCameraItem = null!;
 
     public MainWindow()
     {
@@ -41,6 +44,16 @@ public partial class MainWindow : Window
 
         stateMachine = new EasyEyesStateMachine(_actions);
         _stateMachine = stateMachine;
+
+        _busyIndicatorManager = new BusyIndicatorManager(
+            _mediaDeviceMonitor,
+            cameraGraceScheduler: new DispatcherTimerScheduler(),
+            microphoneGraceScheduler: new DispatcherTimerScheduler(),
+            gracePeriod: TimeSpan.FromSeconds(5));
+        _busyIndicatorManager.BusyCleared += (_, _) =>
+        {
+            _micCameraItem.Checked = false;
+        };
 
         InitializeComponent();
         Loaded += OnLoaded;
@@ -104,6 +117,22 @@ public partial class MainWindow : Window
             }
         };
         menu.Items.Add(_pauseForItem);
+
+        menu.Items.Add(new Forms.ToolStripSeparator());
+
+        _micCameraItem = new Forms.ToolStripMenuItem("Mic / Camera active")
+        {
+            CheckOnClick = true,
+            Checked = false
+        };
+        _micCameraItem.CheckedChanged += (_, _) =>
+        {
+            if (_micCameraItem.Checked)
+                _busyIndicatorManager.EnableMicCamera();
+            else
+                _busyIndicatorManager.DisableMicCamera();
+        };
+        menu.Items.Add(_micCameraItem);
 
         menu.Items.Add(new Forms.ToolStripSeparator());
 
@@ -214,6 +243,7 @@ public partial class MainWindow : Window
     {
         App.Log($"MainWindow OnClosed, State={_stateMachine.CurrentState}");
         _sessionListener?.Dispose();
+        _mediaDeviceMonitor.Dispose();
         _overlayManager.Dispose();
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
