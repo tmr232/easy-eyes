@@ -7,6 +7,7 @@ public enum State
     // ScreenUnlocked substates
     ActivityTimerRunning,
     OverlayDisplayed,
+    Busy,
 
     // ScreenLocked substates
     RestTimerRunning,
@@ -32,6 +33,7 @@ public enum Trigger
     Resume,
     PauseUntilUnlock,
     PauseForDuration,
+    BusyCleared,
 }
 
 public interface IEasyEyesActions
@@ -53,6 +55,7 @@ public class EasyEyesStateMachine
     private readonly StateMachine<State, Trigger> _machine;
     private readonly StateMachine<State, Trigger>.TriggerWithParameters<TimeSpan> _pauseForDurationTrigger;
     private readonly IEasyEyesActions _actions;
+    private readonly Func<bool> _isBusy;
     private bool _wasOverlayDisplayed;
     private bool _wasScreenSleep;
 
@@ -60,9 +63,10 @@ public class EasyEyesStateMachine
 
     public bool IsInState(State state) => _machine.IsInState(state);
 
-    public EasyEyesStateMachine(IEasyEyesActions actions)
+    public EasyEyesStateMachine(IEasyEyesActions actions, Func<bool>? isBusy = null)
     {
         _actions = actions;
+        _isBusy = isBusy ?? (() => false);
         _machine = new StateMachine<State, Trigger>(State.ActivityTimerRunning);
         _pauseForDurationTrigger = _machine.SetTriggerParameters<TimeSpan>(Trigger.PauseForDuration);
 
@@ -89,7 +93,8 @@ public class EasyEyesStateMachine
         // ScreenUnlocked substates
         _machine.Configure(State.ActivityTimerRunning)
             .SubstateOf(State.ScreenUnlocked)
-            .Permit(Trigger.ActivityTimerExpired, State.OverlayDisplayed)
+            .PermitIf(Trigger.ActivityTimerExpired, State.Busy, () => _isBusy())
+            .PermitIf(Trigger.ActivityTimerExpired, State.OverlayDisplayed, () => !_isBusy())
             .PermitReentry(Trigger.PauseForDuration);
 
         _machine.Configure(State.OverlayDisplayed)
@@ -100,6 +105,11 @@ public class EasyEyesStateMachine
                 _wasOverlayDisplayed = true;
                 _actions.ShowOverlay();
             });
+
+        _machine.Configure(State.Busy)
+            .SubstateOf(State.ScreenUnlocked)
+            .Permit(Trigger.BusyCleared, State.OverlayDisplayed)
+            .Permit(Trigger.PauseForDuration, State.ActivityTimerRunning);
 
         // ScreenLocked substates
         _machine.Configure(State.RestTimerRunning)

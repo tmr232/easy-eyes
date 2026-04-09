@@ -757,7 +757,8 @@ public class EasyEyesStateMachineTests
 public class GivenWhenThenTests
 {
     private readonly MockActions _actions = new();
-    private EasyEyesStateMachine CreateMachine() => new(_actions);
+    private bool _isBusy;
+    private EasyEyesStateMachine CreateMachine() => new(_actions, () => _isBusy);
 
     // --- Screen lock / unlock scenarios ---
 
@@ -1065,6 +1066,124 @@ public class GivenWhenThenTests
         Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
         Assert.Contains(nameof(IEasyEyesActions.HideOverlay), _actions.Calls);
         Assert.Equal(pauseDuration, _actions.LastExtendTTimerDuration);
+    }
+
+    // --- Busy state scenarios ---
+
+    [Fact]
+    public void Given_Busy_When_ActivityTimerExpires_Then_TransitionsToBusy()
+    {
+        // Given: user is busy
+        _isBusy = true;
+        var sm = CreateMachine();
+
+        // When: activity timer expires
+        sm.Fire(Trigger.ActivityTimerExpired);
+
+        // Then: goes to Busy, not OverlayDisplayed
+        Assert.Equal(State.Busy, sm.CurrentState);
+        Assert.True(sm.IsInState(State.ScreenUnlocked));
+        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_NotBusy_When_ActivityTimerExpires_Then_TransitionsToOverlayDisplayed()
+    {
+        // Given: user is not busy
+        _isBusy = false;
+        var sm = CreateMachine();
+
+        // When: activity timer expires
+        sm.Fire(Trigger.ActivityTimerExpired);
+
+        // Then: goes to OverlayDisplayed as normal
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_Busy_When_BusyCleared_Then_TransitionsToOverlayDisplayed()
+    {
+        // Given: in Busy state
+        _isBusy = true;
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ActivityTimerExpired);
+        Assert.Equal(State.Busy, sm.CurrentState);
+        _actions.Calls.Clear();
+
+        // When: busy clears
+        sm.Fire(Trigger.BusyCleared);
+
+        // Then: overlay is shown
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_Busy_When_ScreenLock_Then_TransitionsToRestTimerRunning()
+    {
+        // Given: in Busy state
+        _isBusy = true;
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ActivityTimerExpired);
+        Assert.Equal(State.Busy, sm.CurrentState);
+        _actions.Calls.Clear();
+
+        // When: screen locks
+        sm.Fire(Trigger.ScreenLock);
+
+        // Then: normal transition to RestTimerRunning
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
+    }
+
+    [Fact]
+    public void Given_Busy_When_ScreenSleep_Then_TransitionsToRestTimerRunning()
+    {
+        // Given: in Busy state
+        _isBusy = true;
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ActivityTimerExpired);
+        Assert.Equal(State.Busy, sm.CurrentState);
+        _actions.Calls.Clear();
+
+        // When: screen sleeps
+        sm.Fire(Trigger.ScreenSleep);
+
+        // Then: normal transition to RestTimerRunning
+        Assert.Equal(State.RestTimerRunning, sm.CurrentState);
+    }
+
+    [Fact]
+    public void Given_Busy_When_PauseUntilUnlock_Then_TransitionsToPausedUntilUnlock()
+    {
+        // Given: in Busy state
+        _isBusy = true;
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ActivityTimerExpired);
+        Assert.Equal(State.Busy, sm.CurrentState);
+
+        // When: pause until unlock
+        sm.Fire(Trigger.PauseUntilUnlock);
+
+        // Then: transitions to PausedUntilUnlock
+        Assert.Equal(State.PausedUntilUnlock, sm.CurrentState);
+    }
+
+    [Fact]
+    public void Given_Busy_When_PauseForDuration_Then_TransitionsToActivityTimerRunning()
+    {
+        // Given: in Busy state
+        _isBusy = true;
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ActivityTimerExpired);
+        Assert.Equal(State.Busy, sm.CurrentState);
+        _actions.Calls.Clear();
+
+        // When: pause for duration
+        sm.FirePauseForDuration(TimeSpan.FromMinutes(30));
+
+        // Then: transitions to ActivityTimerRunning
+        Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
     }
 
 }

@@ -42,9 +42,6 @@ public partial class MainWindow : Window
                 App.Log($"  -> NewState: {stateMachine.CurrentState}");
             });
 
-        stateMachine = new EasyEyesStateMachine(_actions);
-        _stateMachine = stateMachine;
-
         _busyIndicatorManager = new BusyIndicatorManager(
             _mediaDeviceMonitor,
             cameraGraceScheduler: new DispatcherTimerScheduler(),
@@ -53,9 +50,15 @@ public partial class MainWindow : Window
             cameraActivationScheduler: new DispatcherTimerScheduler(),
             microphoneActivationScheduler: new DispatcherTimerScheduler(),
             activationWindow: TimeSpan.FromSeconds(30));
+
+        stateMachine = new EasyEyesStateMachine(_actions, () => _busyIndicatorManager.IsBusy);
+        _stateMachine = stateMachine;
+
         _busyIndicatorManager.BusyCleared += (_, _) =>
         {
             _micCameraItem.Checked = false;
+            if (_stateMachine.CurrentState == State.Busy)
+                _stateMachine.Fire(Trigger.BusyCleared);
         };
         _busyIndicatorManager.ActivationExpired += (_, _) =>
         {
@@ -173,7 +176,7 @@ public partial class MainWindow : Window
     {
         var state = _stateMachine.CurrentState;
         var isPaused = state is State.PausedUntilUnlock;
-        var isActive = state is State.ActivityTimerRunning or State.OverlayDisplayed;
+        var isActive = state is State.ActivityTimerRunning or State.OverlayDisplayed or State.Busy;
 
         // T timer display
         if (isActive)
