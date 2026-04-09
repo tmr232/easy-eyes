@@ -11,6 +11,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 - Add `MediaPlaybackMonitor` for detecting system media playback via Windows SMTC API
 
+### Fixed
+
+- Fix overlay showing while busy indicator ("in a meeting") is active by integrating `Busy` state into the state machine
+
 ## [2026.04.02]
 
 ### Fixed
