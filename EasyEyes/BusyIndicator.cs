@@ -27,6 +27,7 @@ public class BusyIndicator
 
     private bool _enabled;
     private bool _subscribed;
+    private bool _persistent;
 
     /// <summary>
     /// True if the indicator is enabled AND the monitored state is currently
@@ -38,6 +39,17 @@ public class BusyIndicator
     /// Whether the indicator is currently enabled (opted-in by the user).
     /// </summary>
     public bool IsEnabled => _enabled;
+
+    /// <summary>
+    /// When true, the indicator does not auto-disable on grace expiry.
+    /// It stays enabled and will re-activate when the monitored state
+    /// becomes active again.
+    /// </summary>
+    public bool Persistent
+    {
+        get => _persistent;
+        set => _persistent = value;
+    }
 
     /// <summary>
     /// Fires when the indicator transitions from inactive to active.
@@ -152,6 +164,14 @@ public class BusyIndicator
     private void OnGraceExpired()
     {
         IsActive = false;
+
+        if (_persistent)
+        {
+            // Stay enabled — will re-activate when the state becomes active again.
+            Cleared?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
         _enabled = false;
         Unsubscribe();
         Cleared?.Invoke(this, EventArgs.Empty);

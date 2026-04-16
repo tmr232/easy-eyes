@@ -162,4 +162,33 @@ public class ActivationWindowIndicatorTests
 
         Assert.True(indicator.IsEnabled);
     }
+
+    // --- Persistent mode ---
+
+    [Fact]
+    public void Given_Persistent_When_EnabledWithInactiveState_Then_NoActivationWindow()
+    {
+        var indicator = CreateIndicator();
+        indicator.Persistent = true;
+
+        indicator.Enable();
+
+        Assert.False(_activationScheduler.IsRunning);
+        Assert.True(indicator.IsEnabled);
+    }
+
+    [Fact]
+    public void Given_Persistent_When_GraceExpires_Then_StaysEnabled()
+    {
+        _stateActive = true;
+        var indicator = CreateIndicator();
+        indicator.Persistent = true;
+        indicator.Enable();
+        SimulateDeactivated();
+
+        _graceScheduler.Expire();
+
+        Assert.False(indicator.IsActive);
+        Assert.True(indicator.IsEnabled);
+    }
 }

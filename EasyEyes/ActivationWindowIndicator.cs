@@ -15,6 +15,17 @@ public class ActivationWindowIndicator
     public bool IsEnabled => _inner.IsEnabled;
 
     /// <summary>
+    /// When true, the indicator does not auto-disable on grace expiry
+    /// and the activation window is suppressed. Delegated to the inner
+    /// <see cref="BusyIndicator"/>.
+    /// </summary>
+    public bool Persistent
+    {
+        get => _inner.Persistent;
+        set => _inner.Persistent = value;
+    }
+
+    /// <summary>
     /// Fires when the inner indicator clears (grace period expired).
     /// </summary>
     public event EventHandler? Cleared;
@@ -42,7 +53,7 @@ public class ActivationWindowIndicator
     {
         _inner.Enable();
 
-        if (!_inner.IsActive)
+        if (!_inner.IsActive && !Persistent)
             _scheduler.Start(_window, OnActivationWindowExpired);
     }
 

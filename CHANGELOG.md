@@ -10,6 +10,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 ### Added
 
 - Add `MediaPlaybackMonitor` for detecting system media playback via Windows SMTC API
+- Add `EnterBusy` trigger: enabling "In a meeting" while the overlay is displayed now hides the overlay and enters the Busy state without resetting the timer
+- Add 3-way "In a meeting" toggle: Off → Until end (auto-disables when meeting ends) → Always (stays active until manually toggled off)
+- Add `Persistent` mode to `BusyIndicator`: when persistent, the indicator stays enabled after grace expiry and re-activates when mic/camera becomes active again
+- Add `MeetingMode` enum and `SetMeetingMode()` API on `BusyIndicatorManager`
 
 ### Fixed
 

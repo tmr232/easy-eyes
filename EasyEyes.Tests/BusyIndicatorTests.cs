@@ -281,4 +281,70 @@ public class BusyIndicatorTests
         Assert.False(indicator.IsActive);
         Assert.False(cleared);
     }
+
+    // --- Persistent mode ---
+
+    [Fact]
+    public void Given_Persistent_When_GraceExpires_Then_StaysEnabled()
+    {
+        _stateActive = true;
+        var indicator = CreateIndicator();
+        indicator.Persistent = true;
+        indicator.Enable();
+        SimulateDeactivated();
+
+        _graceScheduler.Expire();
+
+        Assert.False(indicator.IsActive);
+        Assert.True(indicator.IsEnabled);
+    }
+
+    [Fact]
+    public void Given_Persistent_When_GraceExpires_Then_ClearedFires()
+    {
+        _stateActive = true;
+        var indicator = CreateIndicator();
+        indicator.Persistent = true;
+        indicator.Enable();
+        var cleared = false;
+        indicator.Cleared += (_, _) => cleared = true;
+        SimulateDeactivated();
+
+        _graceScheduler.Expire();
+
+        Assert.True(cleared);
+    }
+
+    [Fact]
+    public void Given_PersistentAndGraceExpired_When_StateReactivates_Then_BecomesActive()
+    {
+        _stateActive = true;
+        var indicator = CreateIndicator();
+        indicator.Persistent = true;
+        indicator.Enable();
+        SimulateDeactivated();
+        _graceScheduler.Expire();
+
+        Assert.False(indicator.IsActive);
+
+        SimulateActivated();
+
+        Assert.True(indicator.IsActive);
+        Assert.True(indicator.IsEnabled);
+    }
+
+    [Fact]
+    public void Given_NotPersistent_When_GraceExpires_Then_AutoDisables()
+    {
+        _stateActive = true;
+        var indicator = CreateIndicator();
+        indicator.Persistent = false;
+        indicator.Enable();
+        SimulateDeactivated();
+
+        _graceScheduler.Expire();
+
+        Assert.False(indicator.IsActive);
+        Assert.False(indicator.IsEnabled);
+    }
 }
