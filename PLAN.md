@@ -36,6 +36,8 @@ All side effects (timers, overlay, toast) are injected via the
 | `Resume`           | User requests resume (from PausedUntilUnlock)                                                               |
 | `PauseUntilUnlock` | User requests pause until next screen unlock                                                                |
 | `PauseForDuration` | User requests timed extension (parameterized: TimeSpan); extends T.remaining to at least the given duration |
+| `BusyCleared`      | All busy indicators cleared; transitions Busy → OverlayDisplayed                                            |
+| `EnterBusy`        | User enables meeting indicator while overlay is displayed; transitions OverlayDisplayed → Busy              |
 
 ### Transition Actions
 
@@ -47,6 +49,7 @@ All side effects (timers, overlay, toast) are injected via the
 - **PauseForDuration**: suspends T timer, hides overlay, clears overlay flag, sets `T.remaining = max(duration, T.remaining)`, resumes T timer (returns to T_TimerRunning)
 - **Resume** (from PausedUntilUnlock): resets T (via OnExit), then resumes T timer
 - **ScreenUnlock from PausedUntilUnlock**: resets T (via OnExit), then resumes T
+- **EnterBusy** (from OverlayDisplayed): hides overlay but preserves the overlay-displayed flag and does not reset the timer
 
 ### Tray Menu
 
@@ -55,6 +58,10 @@ The system tray context menu provides:
 - **T timer display** — shows remaining time (`T: mm:ss remaining`) or `T: paused`
 - **Pause until unlock** — checkmark toggle; checked when in PausedUntilUnlock
 - **Pause for...** — opens a dialog to enter minutes; extends T.remaining to at least that duration
+- **In a meeting** — 3-way toggle (click cycles): Off → Until end → Always → Off
+  - **Off** — indicator disabled
+  - **Until end** — indicator enabled; auto-disables when mic/camera stops (after grace period)
+  - **Always** — indicator stays enabled permanently; must be toggled off manually
 - **Exit** — shuts down the application
 
 Menu items are shown/hidden dynamically via the `ContextMenuStrip.Opening` event.

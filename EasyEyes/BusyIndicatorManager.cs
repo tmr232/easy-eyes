@@ -1,6 +1,28 @@
 namespace EasyEyes;
 
 /// <summary>
+/// Controls how the "In a meeting" indicator behaves.
+/// </summary>
+public enum MeetingMode
+{
+    /// <summary>Indicator disabled.</summary>
+    Off,
+
+    /// <summary>
+    /// Indicator enabled. Auto-disables when the meeting ends
+    /// (mic/camera grace period expires).
+    /// </summary>
+    UntilEnd,
+
+    /// <summary>
+    /// Indicator enabled and persistent. When the meeting ends the
+    /// indicator stays enabled and will re-activate when mic/camera
+    /// becomes active again. Must be toggled off manually.
+    /// </summary>
+    Always,
+}
+
+/// <summary>
 /// Tracks enabled busy indicators and provides an aggregate busy state.
 /// When any enabled indicator is active, <see cref="IsBusy"/> is true.
 /// When the last active indicator clears, <see cref="BusyCleared"/> fires.
@@ -25,6 +47,11 @@ public class BusyIndicatorManager
     /// Whether the mic/camera indicator is currently enabled.
     /// </summary>
     public bool IsMicCameraEnabled => _cameraIndicator.IsEnabled || _microphoneIndicator.IsEnabled;
+
+    /// <summary>
+    /// The current meeting indicator mode.
+    /// </summary>
+    public MeetingMode CurrentMeetingMode { get; private set; }
 
     /// <summary>
     /// Fires when <see cref="IsBusy"/> transitions from true to false.
@@ -92,13 +119,34 @@ public class BusyIndicatorManager
     }
 
     /// <summary>
-    /// Enables the mic/camera indicator. Both camera and microphone are
-    /// monitored; either being in use makes the indicator active.
+    /// Sets the meeting indicator mode.  <see cref="MeetingMode.Off"/>
+    /// disables the indicator; other values enable it with the
+    /// corresponding persistence behaviour.
+    /// </summary>
+    public void SetMeetingMode(MeetingMode mode)
+    {
+        if (mode == MeetingMode.Off)
+        {
+            DisableMicCamera();
+            return;
+        }
+
+        CurrentMeetingMode = mode;
+        var persistent = mode == MeetingMode.Always;
+        _cameraIndicator.Persistent = persistent;
+        _microphoneIndicator.Persistent = persistent;
+        _cameraIndicator.Enable();
+        _microphoneIndicator.Enable();
+    }
+
+    /// <summary>
+    /// Enables the mic/camera indicator in <see cref="MeetingMode.UntilEnd"/>
+    /// mode. Both camera and microphone are monitored; either being in use
+    /// makes the indicator active.
     /// </summary>
     public void EnableMicCamera()
     {
-        _cameraIndicator.Enable();
-        _microphoneIndicator.Enable();
+        SetMeetingMode(MeetingMode.UntilEnd);
     }
 
     /// <summary>
@@ -106,7 +154,10 @@ public class BusyIndicatorManager
     /// </summary>
     public void DisableMicCamera()
     {
+        CurrentMeetingMode = MeetingMode.Off;
         var wasBusy = IsBusy;
+        _cameraIndicator.Persistent = false;
+        _microphoneIndicator.Persistent = false;
         _cameraIndicator.Disable();
         _microphoneIndicator.Disable();
         if (wasBusy)

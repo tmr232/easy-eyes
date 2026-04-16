@@ -34,6 +34,7 @@ public enum Trigger
     PauseUntilUnlock,
     PauseForDuration,
     BusyCleared,
+    EnterBusy,
 }
 
 public interface IEasyEyesActions
@@ -100,6 +101,7 @@ public class EasyEyesStateMachine
         _machine.Configure(State.OverlayDisplayed)
             .SubstateOf(State.ScreenUnlocked)
             .Permit(Trigger.PauseForDuration, State.ActivityTimerRunning)
+            .Permit(Trigger.EnterBusy, State.Busy)
             .OnEntry(() =>
             {
                 _wasOverlayDisplayed = true;
@@ -109,7 +111,11 @@ public class EasyEyesStateMachine
         _machine.Configure(State.Busy)
             .SubstateOf(State.ScreenUnlocked)
             .Permit(Trigger.BusyCleared, State.OverlayDisplayed)
-            .Permit(Trigger.PauseForDuration, State.ActivityTimerRunning);
+            .Permit(Trigger.PauseForDuration, State.ActivityTimerRunning)
+            .OnEntryFrom(Trigger.EnterBusy, () =>
+            {
+                _actions.HideOverlay();
+            });
 
         // ScreenLocked substates
         _machine.Configure(State.RestTimerRunning)

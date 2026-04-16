@@ -1186,6 +1186,76 @@ public class GivenWhenThenTests
         Assert.Equal(State.ActivityTimerRunning, sm.CurrentState);
     }
 
+    // --- EnterBusy from OverlayDisplayed ---
+
+    [Fact]
+    public void Given_OverlayDisplayed_When_EnterBusy_Then_TransitionsToBusy()
+    {
+        // Given: overlay is displayed
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ActivityTimerExpired);
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+        _actions.Calls.Clear();
+
+        // When: EnterBusy is fired (user enables meeting indicator)
+        sm.Fire(Trigger.EnterBusy);
+
+        // Then: transitions to Busy and hides the overlay
+        Assert.Equal(State.Busy, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.HideOverlay), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_OverlayDisplayed_When_EnterBusy_Then_TimerNotReset()
+    {
+        // Given: overlay is displayed
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ActivityTimerExpired);
+        _actions.Calls.Clear();
+
+        // When: EnterBusy is fired
+        sm.Fire(Trigger.EnterBusy);
+
+        // Then: activity timer is NOT reset or suspended
+        Assert.DoesNotContain(nameof(IEasyEyesActions.ResetActivityTimer), _actions.Calls);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.SuspendActivityTimer), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_OverlayDisplayed_When_EnterBusyThenBusyCleared_Then_OverlayReShown()
+    {
+        // Given: overlay is displayed, then enters Busy
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ActivityTimerExpired);
+        sm.Fire(Trigger.EnterBusy);
+        Assert.Equal(State.Busy, sm.CurrentState);
+        _actions.Calls.Clear();
+
+        // When: busy clears
+        sm.Fire(Trigger.BusyCleared);
+
+        // Then: overlay is re-shown
+        Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
+    }
+
+    [Fact]
+    public void Given_OverlayDisplayed_When_EnterBusy_Then_WasOverlayDisplayedPreserved()
+    {
+        // Given: overlay is displayed, then enters Busy, then screen locks
+        var sm = CreateMachine();
+        sm.Fire(Trigger.ActivityTimerExpired);
+        sm.Fire(Trigger.EnterBusy);
+
+        // When: screen locks and L expires
+        sm.Fire(Trigger.ScreenLock);
+        sm.Fire(Trigger.RestTimerExpired);
+
+        // Then: toast is shown (because _wasOverlayDisplayed was preserved)
+        Assert.Equal(State.ToastDisplayed, sm.CurrentState);
+        Assert.Contains(nameof(IEasyEyesActions.NotifyUser), _actions.Calls);
+    }
+
 }
 
 public class EasyEyesActionsTests

@@ -56,13 +56,14 @@ public partial class MainWindow : Window
 
         _busyIndicatorManager.BusyCleared += (_, _) =>
         {
-            _micCameraItem.Checked = false;
+            if (_busyIndicatorManager.CurrentMeetingMode == MeetingMode.Off)
+                UpdateMeetingMenuLabel();
             if (_stateMachine.CurrentState == State.Busy)
                 _stateMachine.Fire(Trigger.BusyCleared);
         };
         _busyIndicatorManager.ActivationExpired += (_, _) =>
         {
-            _micCameraItem.Checked = false;
+            UpdateMeetingMenuLabel();
             _trayIcon.ShowBalloonTip(
                 3000,
                 "Easy Eyes",
@@ -135,18 +136,12 @@ public partial class MainWindow : Window
 
         menu.Items.Add(new Forms.ToolStripSeparator());
 
-        _micCameraItem = new Forms.ToolStripMenuItem("In a meeting (busy)")
+        _micCameraItem = new Forms.ToolStripMenuItem("In a meeting")
         {
-            CheckOnClick = true,
+            CheckOnClick = false,
             Checked = false
         };
-        _micCameraItem.CheckedChanged += (_, _) =>
-        {
-            if (_micCameraItem.Checked)
-                _busyIndicatorManager.EnableMicCamera();
-            else
-                _busyIndicatorManager.DisableMicCamera();
-        };
+        _micCameraItem.Click += (_, _) => CycleMeetingMode();
         menu.Items.Add(_micCameraItem);
 
         menu.Items.Add(new Forms.ToolStripSeparator());
@@ -201,6 +196,37 @@ public partial class MainWindow : Window
 
         // Pause for...
         _pauseForItem.Visible = isActive;
+    }
+
+    private void CycleMeetingMode()
+    {
+        var next = _busyIndicatorManager.CurrentMeetingMode switch
+        {
+            MeetingMode.Off => MeetingMode.UntilEnd,
+            MeetingMode.UntilEnd => MeetingMode.Always,
+            MeetingMode.Always => MeetingMode.Off,
+            _ => MeetingMode.Off,
+        };
+
+        _busyIndicatorManager.SetMeetingMode(next);
+        UpdateMeetingMenuLabel();
+
+        // If enabling while the overlay is already displayed, transition to Busy.
+        if (next != MeetingMode.Off && _stateMachine.CurrentState == State.OverlayDisplayed)
+            _stateMachine.Fire(Trigger.EnterBusy);
+    }
+
+    private void UpdateMeetingMenuLabel()
+    {
+        var (text, check) = _busyIndicatorManager.CurrentMeetingMode switch
+        {
+            MeetingMode.Off => ("In a meeting", false),
+            MeetingMode.UntilEnd => ("In a meeting (until end)", true),
+            MeetingMode.Always => ("In a meeting (always)", true),
+            _ => ("In a meeting", false),
+        };
+        _micCameraItem.Text = text;
+        _micCameraItem.Checked = check;
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)

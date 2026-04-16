@@ -50,13 +50,14 @@ ______________________________________________________________________
 
 ### State Machine Changes
 
-| Change                                            | Detail                                                        |
-| ------------------------------------------------- | ------------------------------------------------------------- |
-| New state `Busy`                                  | Substate of `ScreenUnlocked`                                  |
-| `ActivityTimerExpired`                            | Conditional: → `Busy` if busy, → `OverlayDisplayed` otherwise |
-| New trigger `BusyCleared`                         | Transitions `Busy` → `OverlayDisplayed`                       |
-| `ScreenLock`/`ScreenSleep` from `Busy`            | Handled by `ScreenUnlocked` superstate → `RestTimerRunning`   |
-| `PauseUntilUnlock`/`PauseForDuration` from `Busy` | Same as from `OverlayDisplayed`                               |
+| Change                                            | Detail                                                                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| New state `Busy`                                  | Substate of `ScreenUnlocked`                                                                                             |
+| `ActivityTimerExpired`                            | Conditional: → `Busy` if busy, → `OverlayDisplayed` otherwise                                                            |
+| New trigger `BusyCleared`                         | Transitions `Busy` → `OverlayDisplayed`                                                                                  |
+| `ScreenLock`/`ScreenSleep` from `Busy`            | Handled by `ScreenUnlocked` superstate → `RestTimerRunning`                                                              |
+| `PauseUntilUnlock`/`PauseForDuration` from `Busy` | Same as from `OverlayDisplayed`                                                                                          |
+| New trigger `EnterBusy`                           | Transitions `OverlayDisplayed` → `Busy`; hides overlay but preserves overlay-displayed flag and does not reset the timer |
 
 ### New Component: `BusyIndicatorManager`
 
@@ -70,11 +71,17 @@ ______________________________________________________________________
 
 ### Tray Menu Changes
 
-Add a submenu or section **"Busy indicators"** with checkboxes:
+The "In a meeting" tray menu item is a 3-way click-cycle toggle:
 
-- ☐ Mic / Camera active
+- **Off** — `In a meeting` (no checkmark). Indicator disabled.
+- **Until end** — `In a meeting (until end)` ✓. Indicator enabled;
+  auto-disables when mic/camera stops after grace period.
+- **Always** — `In a meeting (always)` ✓. Indicator stays enabled
+  permanently; must be toggled off manually. No activation window.
 
-(Media playing added in Phase 2.)
+Clicking cycles Off → Until end → Always → Off.
+
+(Media playing indicator added in Phase 2.)
 
 ### Integration in `MainWindow`
 

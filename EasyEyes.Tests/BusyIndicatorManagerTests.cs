@@ -276,4 +276,115 @@ public class BusyIndicatorManagerTests
         Assert.False(expired);
         Assert.True(manager.IsBusy);
     }
+
+    // --- Meeting mode ---
+
+    [Fact]
+    public void SetMeetingMode_Off_DisablesIndicator()
+    {
+        _micActive = true;
+        var manager = CreateManager();
+        manager.SetMeetingMode(MeetingMode.UntilEnd);
+        Assert.True(manager.IsBusy);
+
+        manager.SetMeetingMode(MeetingMode.Off);
+
+        Assert.Equal(MeetingMode.Off, manager.CurrentMeetingMode);
+        Assert.False(manager.IsBusy);
+        Assert.False(manager.IsMicCameraEnabled);
+    }
+
+    [Fact]
+    public void SetMeetingMode_UntilEnd_AutoDisablesOnGraceExpiry()
+    {
+        _micActive = true;
+        var manager = CreateManager();
+        manager.SetMeetingMode(MeetingMode.UntilEnd);
+        Assert.Equal(MeetingMode.UntilEnd, manager.CurrentMeetingMode);
+
+        SimulateMicDeactivated();
+        _micGrace.Expire();
+        SimulateCameraDeactivated();
+        _cameraGrace.Expire();
+
+        Assert.False(manager.IsBusy);
+        Assert.False(manager.IsMicCameraEnabled);
+    }
+
+    [Fact]
+    public void SetMeetingMode_Always_StaysEnabledAfterGraceExpiry()
+    {
+        _micActive = true;
+        var manager = CreateManager();
+        manager.SetMeetingMode(MeetingMode.Always);
+        Assert.Equal(MeetingMode.Always, manager.CurrentMeetingMode);
+
+        SimulateMicDeactivated();
+        _micGrace.Expire();
+
+        Assert.False(manager.IsBusy);
+        Assert.True(manager.IsMicCameraEnabled);
+    }
+
+    [Fact]
+    public void SetMeetingMode_Always_ReactivatesWhenDeviceComesBack()
+    {
+        _micActive = true;
+        var manager = CreateManager();
+        manager.SetMeetingMode(MeetingMode.Always);
+
+        SimulateMicDeactivated();
+        _micGrace.Expire();
+        Assert.False(manager.IsBusy);
+
+        SimulateMicActivated();
+        Assert.True(manager.IsBusy);
+    }
+
+    [Fact]
+    public void SetMeetingMode_Always_NoActivationWindow()
+    {
+        var manager = CreateManager();
+        manager.SetMeetingMode(MeetingMode.Always);
+
+        // Activation window timers should not be running
+        Assert.False(_cameraActivation.IsRunning);
+        Assert.False(_micActivation.IsRunning);
+    }
+
+    [Fact]
+    public void SetMeetingMode_Always_BusyClearedFiresButStaysEnabled()
+    {
+        _micActive = true;
+        var manager = CreateManager();
+        manager.SetMeetingMode(MeetingMode.Always);
+        var clearedCount = 0;
+        manager.BusyCleared += (_, _) => clearedCount++;
+
+        SimulateMicDeactivated();
+        _micGrace.Expire();
+        SimulateCameraDeactivated();
+        _cameraGrace.Expire();
+
+        Assert.True(clearedCount > 0);
+        Assert.True(manager.IsMicCameraEnabled);
+    }
+
+    [Fact]
+    public void SetMeetingMode_Cycling_Off_UntilEnd_Always_Off()
+    {
+        var manager = CreateManager();
+
+        manager.SetMeetingMode(MeetingMode.UntilEnd);
+        Assert.Equal(MeetingMode.UntilEnd, manager.CurrentMeetingMode);
+        Assert.True(manager.IsMicCameraEnabled);
+
+        manager.SetMeetingMode(MeetingMode.Always);
+        Assert.Equal(MeetingMode.Always, manager.CurrentMeetingMode);
+        Assert.True(manager.IsMicCameraEnabled);
+
+        manager.SetMeetingMode(MeetingMode.Off);
+        Assert.Equal(MeetingMode.Off, manager.CurrentMeetingMode);
+        Assert.False(manager.IsMicCameraEnabled);
+    }
 }
