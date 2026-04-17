@@ -11,6 +11,7 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 - Extract `TrayIconManager` from `MainWindow` to own the system tray icon, context menu, and all menu interaction logic (meeting mode cycling, pause controls, timer display)
 - Implement `IDisposable` on `BusyIndicatorManager` to properly clean up owned indicator resources (timers, event subscriptions) on shutdown
+- Add `GetTRemaining()` and `StartActivityTimer()` to `IEasyEyesActions` interface; update `TrayIconManager` to depend on the interface instead of the concrete `EasyEyesActions`
 
 ### Added
 
