@@ -144,6 +144,7 @@ public partial class MainWindow : Window
         App.Log($"MainWindow OnClosed, State={_stateMachine.CurrentState}");
         _sessionListener?.Dispose();
         _mediaDeviceMonitor.Dispose();
+        _busyIndicatorManager.Dispose();
         _overlayManager.Dispose();
         _trayIconManager.Dispose();
         base.OnClosed(e);
