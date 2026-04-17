@@ -1276,7 +1276,7 @@ public class EasyEyesActionsTests
             showOverlay: () => { },
             hideOverlay: () => { },
             showToast: () => { },
-            fireTrigger: _ => { });
+            triggerRelay: new TriggerRelay());
 
         actions.StartActivityTimer();
         fakeTime.Advance(tDuration + TimeSpan.FromSeconds(1));
