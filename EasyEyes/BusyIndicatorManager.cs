@@ -28,7 +28,7 @@ public enum MeetingMode
 /// <see cref="IsBusy"/> is true. When it clears, <see cref="BusyCleared"/>
 /// fires.
 /// </summary>
-public class BusyIndicatorManager
+public class BusyIndicatorManager : IDisposable
 {
     private readonly ActivationWindowIndicator _indicator;
 
@@ -124,5 +124,11 @@ public class BusyIndicatorManager
         _indicator.Disable();
         if (wasBusy)
             BusyCleared?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Dispose()
+    {
+        _indicator.Disable();
+        GC.SuppressFinalize(this);
     }
 }
