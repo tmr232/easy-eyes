@@ -59,7 +59,6 @@ public partial class OverlayWindow : Window
         PositionOnScreen(screen);
 
         SourceInitialized += OnSourceInitialized;
-        CompositionTarget.Rendering += OnRendering;
     }
 
     public void PositionOnScreen(Forms.Screen screen)
@@ -75,12 +74,14 @@ public partial class OverlayWindow : Window
 
     public void ShowOverlay()
     {
+        CompositionTarget.Rendering += OnRendering;
         var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromSeconds(5));
         Overlay.BeginAnimation(OpacityProperty, fadeIn);
     }
 
     public void HideOverlay()
     {
+        CompositionTarget.Rendering -= OnRendering;
         Overlay.BeginAnimation(OpacityProperty, null);
         Overlay.Opacity = 0;
     }
