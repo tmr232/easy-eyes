@@ -7,6 +7,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+### Changed
+
+- Extract `TrayIconManager` from `MainWindow` to own the system tray icon, context menu, and all menu interaction logic (meeting mode cycling, pause controls, timer display)
+
 ### Added
 
 - Add `MediaPlaybackMonitor` for detecting system media playback via Windows SMTC API
