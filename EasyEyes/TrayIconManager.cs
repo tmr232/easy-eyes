@@ -17,7 +17,7 @@ public class TrayIconManager : IDisposable
     private readonly Forms.ToolStripMenuItem _micCameraItem;
     private readonly Forms.ToolStripMenuItem _pauseMediaOnLockItem;
     private readonly EasyEyesStateMachine _stateMachine;
-    private readonly EasyEyesActions _actions;
+    private readonly IEasyEyesActions _actions;
     private readonly BusyIndicatorManager _busyIndicatorManager;
     private bool _pauseMediaOnLock = true;
 
@@ -25,7 +25,7 @@ public class TrayIconManager : IDisposable
 
     public TrayIconManager(
         EasyEyesStateMachine stateMachine,
-        EasyEyesActions actions,
+        IEasyEyesActions actions,
         BusyIndicatorManager busyIndicatorManager)
     {
         _stateMachine = stateMachine;

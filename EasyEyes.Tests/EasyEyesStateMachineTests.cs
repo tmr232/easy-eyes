@@ -21,6 +21,9 @@ public class MockActions : IEasyEyesActions
         LastExtendTTimerDuration = duration;
         Calls.Add(nameof(ExtendActivityTimer));
     }
+
+    public TimeSpan GetTRemaining() => TimeSpan.Zero;
+    public void StartActivityTimer() => Calls.Add(nameof(StartActivityTimer));
 }
 
 public class EasyEyesStateMachineTests

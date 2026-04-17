@@ -49,6 +49,9 @@ public interface IEasyEyesActions
     void RestartRestTimer();
     void StopRestTimer();
     void ExtendActivityTimer(TimeSpan duration);
+
+    TimeSpan GetTRemaining();
+    void StartActivityTimer();
 }
 
 public class EasyEyesStateMachine
