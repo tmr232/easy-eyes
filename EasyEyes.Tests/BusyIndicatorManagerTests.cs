@@ -7,10 +7,7 @@ public class BusyIndicatorManagerTests
     private static readonly TimeSpan GracePeriod = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ActivationWindow = TimeSpan.FromSeconds(30);
 
-    private bool _deviceActive;
-    private event EventHandler? DeviceActivated;
-    private event EventHandler? DeviceDeactivated;
-
+    private readonly FakeStateSource _source = new();
     private readonly FakeTimerScheduler _graceScheduler = new();
     private readonly FakeTimerScheduler _activationScheduler = new();
 
@@ -18,11 +15,7 @@ public class BusyIndicatorManagerTests
     {
         var indicator = new ActivationWindowIndicator(
             new BusyIndicator(
-                isStateActive: () => _deviceActive,
-                subscribeActivated: h => DeviceActivated += h,
-                unsubscribeActivated: h => DeviceActivated -= h,
-                subscribeDeactivated: h => DeviceDeactivated += h,
-                unsubscribeDeactivated: h => DeviceDeactivated -= h,
+                _source,
                 graceScheduler: _graceScheduler,
                 gracePeriod: GracePeriod),
             _activationScheduler,
@@ -31,8 +24,8 @@ public class BusyIndicatorManagerTests
         return new BusyIndicatorManager(indicator);
     }
 
-    private void SimulateDeviceActivated() => DeviceActivated?.Invoke(this, EventArgs.Empty);
-    private void SimulateDeviceDeactivated() => DeviceDeactivated?.Invoke(this, EventArgs.Empty);
+    private void SimulateDeviceActivated() => _source.SimulateActivated();
+    private void SimulateDeviceDeactivated() => _source.SimulateDeactivated();
 
     // --- Initial state ---
 
@@ -49,7 +42,7 @@ public class BusyIndicatorManagerTests
     [Fact]
     public void Given_DeviceActive_When_Enabled_Then_IsBusy()
     {
-        _deviceActive = true;
+        _source.IsActive = true;
         var manager = CreateManager();
 
         manager.EnableMeeting();
@@ -74,7 +67,7 @@ public class BusyIndicatorManagerTests
     [Fact]
     public void Given_DeviceActive_When_DeviceClears_Then_BusyCleared()
     {
-        _deviceActive = true;
+        _source.IsActive = true;
         var manager = CreateManager();
         manager.EnableMeeting();
         var cleared = false;
@@ -92,7 +85,7 @@ public class BusyIndicatorManagerTests
     [Fact]
     public void Given_Busy_When_Disabled_Then_BusyCleared()
     {
-        _deviceActive = true;
+        _source.IsActive = true;
         var manager = CreateManager();
         manager.EnableMeeting();
         var cleared = false;
@@ -123,7 +116,7 @@ public class BusyIndicatorManagerTests
     [Fact]
     public void Given_DeviceDeactivated_When_DeviceReactivatesWithinGrace_Then_StillBusy()
     {
-        _deviceActive = true;
+        _source.IsActive = true;
         var manager = CreateManager();
         manager.EnableMeeting();
 
@@ -184,7 +177,7 @@ public class BusyIndicatorManagerTests
     [Fact]
     public void SetMeetingMode_Off_DisablesIndicator()
     {
-        _deviceActive = true;
+        _source.IsActive = true;
         var manager = CreateManager();
         manager.SetMeetingMode(MeetingMode.UntilEnd);
         Assert.True(manager.IsBusy);
@@ -199,7 +192,7 @@ public class BusyIndicatorManagerTests
     [Fact]
     public void SetMeetingMode_UntilEnd_AutoDisablesOnGraceExpiry()
     {
-        _deviceActive = true;
+        _source.IsActive = true;
         var manager = CreateManager();
         manager.SetMeetingMode(MeetingMode.UntilEnd);
         Assert.Equal(MeetingMode.UntilEnd, manager.CurrentMeetingMode);
@@ -214,7 +207,7 @@ public class BusyIndicatorManagerTests
     [Fact]
     public void SetMeetingMode_Always_StaysEnabledAfterGraceExpiry()
     {
-        _deviceActive = true;
+        _source.IsActive = true;
         var manager = CreateManager();
         manager.SetMeetingMode(MeetingMode.Always);
         Assert.Equal(MeetingMode.Always, manager.CurrentMeetingMode);
@@ -229,7 +222,7 @@ public class BusyIndicatorManagerTests
     [Fact]
     public void SetMeetingMode_Always_ReactivatesWhenDeviceComesBack()
     {
-        _deviceActive = true;
+        _source.IsActive = true;
         var manager = CreateManager();
         manager.SetMeetingMode(MeetingMode.Always);
 
@@ -253,7 +246,7 @@ public class BusyIndicatorManagerTests
     [Fact]
     public void SetMeetingMode_Always_BusyClearedFiresButStaysEnabled()
     {
-        _deviceActive = true;
+        _source.IsActive = true;
         var manager = CreateManager();
         manager.SetMeetingMode(MeetingMode.Always);
         var clearedCount = 0;

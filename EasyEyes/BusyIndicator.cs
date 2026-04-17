@@ -17,11 +17,7 @@ namespace EasyEyes;
 /// </remarks>
 public class BusyIndicator
 {
-    private readonly Func<bool> _isStateActive;
-    private readonly Action<EventHandler> _subscribeActivated;
-    private readonly Action<EventHandler> _unsubscribeActivated;
-    private readonly Action<EventHandler> _subscribeDeactivated;
-    private readonly Action<EventHandler> _unsubscribeDeactivated;
+    private readonly IStateSource _source;
     private readonly ITimerScheduler _graceScheduler;
     private readonly TimeSpan _gracePeriod;
 
@@ -65,27 +61,15 @@ public class BusyIndicator
     /// <summary>
     /// Creates a new busy indicator.
     /// </summary>
-    /// <param name="isStateActive">Queries whether the monitored state is currently active.</param>
-    /// <param name="subscribeActivated">Subscribes a handler to the "state activated" event.</param>
-    /// <param name="unsubscribeActivated">Unsubscribes a handler from the "state activated" event.</param>
-    /// <param name="subscribeDeactivated">Subscribes a handler to the "state deactivated" event.</param>
-    /// <param name="unsubscribeDeactivated">Unsubscribes a handler from the "state deactivated" event.</param>
+    /// <param name="source">The state source to monitor.</param>
     /// <param name="graceScheduler">Timer scheduler for the grace period (use <see cref="DispatcherTimerScheduler"/> in production).</param>
     /// <param name="gracePeriod">Duration of the grace period before auto-disabling.</param>
     public BusyIndicator(
-        Func<bool> isStateActive,
-        Action<EventHandler> subscribeActivated,
-        Action<EventHandler> unsubscribeActivated,
-        Action<EventHandler> subscribeDeactivated,
-        Action<EventHandler> unsubscribeDeactivated,
+        IStateSource source,
         ITimerScheduler graceScheduler,
         TimeSpan gracePeriod)
     {
-        _isStateActive = isStateActive;
-        _subscribeActivated = subscribeActivated;
-        _unsubscribeActivated = unsubscribeActivated;
-        _subscribeDeactivated = subscribeDeactivated;
-        _unsubscribeDeactivated = unsubscribeDeactivated;
+        _source = source;
         _graceScheduler = graceScheduler;
         _gracePeriod = gracePeriod;
     }
@@ -101,7 +85,7 @@ public class BusyIndicator
 
         _enabled = true;
         Subscribe();
-        IsActive = _isStateActive();
+        IsActive = _source.IsActive;
         if (IsActive)
             BecameActive?.Invoke(this, EventArgs.Empty);
     }
@@ -127,8 +111,8 @@ public class BusyIndicator
             return;
 
         _subscribed = true;
-        _subscribeActivated(OnActivated);
-        _subscribeDeactivated(OnDeactivated);
+        _source.Activated += OnActivated;
+        _source.Deactivated += OnDeactivated;
     }
 
     private void Unsubscribe()
@@ -137,8 +121,8 @@ public class BusyIndicator
             return;
 
         _subscribed = false;
-        _unsubscribeActivated(OnActivated);
-        _unsubscribeDeactivated(OnDeactivated);
+        _source.Activated -= OnActivated;
+        _source.Deactivated -= OnDeactivated;
     }
 
     private void OnActivated(object? sender, EventArgs e)

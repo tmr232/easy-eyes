@@ -22,7 +22,7 @@ namespace EasyEyes;
 /// thread if needed.
 /// </para>
 /// </remarks>
-public sealed class MediaDeviceMonitor : IDisposable
+public sealed class MediaDeviceMonitor : IStateSource, IDisposable
 {
     private readonly DeviceUsageDetector _camera = new("webcam");
     private readonly DeviceUsageDetector _microphone = new("microphone");
@@ -34,6 +34,9 @@ public sealed class MediaDeviceMonitor : IDisposable
     /// Whether any monitored device (camera or microphone) is currently in use.
     /// </summary>
     public bool IsInUse => _camera.IsInUse || _microphone.IsInUse;
+
+    /// <inheritdoc />
+    bool IStateSource.IsActive => IsInUse;
 
     /// <summary>
     /// Fires when transitioning from no devices in use to at least one device in use.
