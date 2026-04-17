@@ -63,21 +63,14 @@ public class BusyIndicatorManager
     /// camera and microphone monitoring.
     /// </summary>
     public BusyIndicatorManager(
-        MediaDeviceMonitor monitor,
+        IStateSource source,
         ITimerScheduler graceScheduler,
         TimeSpan gracePeriod,
         ITimerScheduler activationScheduler,
         TimeSpan activationWindow)
         : this(
             new ActivationWindowIndicator(
-                new BusyIndicator(
-                    isStateActive: () => monitor.IsInUse,
-                    subscribeActivated: h => monitor.Activated += h,
-                    unsubscribeActivated: h => monitor.Activated -= h,
-                    subscribeDeactivated: h => monitor.Deactivated += h,
-                    unsubscribeDeactivated: h => monitor.Deactivated -= h,
-                    graceScheduler: graceScheduler,
-                    gracePeriod: gracePeriod),
+                new BusyIndicator(source, graceScheduler, gracePeriod),
                 activationScheduler,
                 activationWindow))
     {

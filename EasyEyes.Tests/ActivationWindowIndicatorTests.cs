@@ -7,29 +7,22 @@ public class ActivationWindowIndicatorTests
     private static readonly TimeSpan GracePeriod = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ActivationWindow = TimeSpan.FromSeconds(30);
 
-    private bool _stateActive;
-    private event EventHandler? Activated;
-    private event EventHandler? Deactivated;
-
+    private readonly FakeStateSource _source = new();
     private readonly FakeTimerScheduler _graceScheduler = new();
     private readonly FakeTimerScheduler _activationScheduler = new();
 
     private ActivationWindowIndicator CreateIndicator()
     {
         var inner = new BusyIndicator(
-            isStateActive: () => _stateActive,
-            subscribeActivated: h => Activated += h,
-            unsubscribeActivated: h => Activated -= h,
-            subscribeDeactivated: h => Deactivated += h,
-            unsubscribeDeactivated: h => Deactivated -= h,
+            _source,
             graceScheduler: _graceScheduler,
             gracePeriod: GracePeriod);
 
         return new ActivationWindowIndicator(inner, _activationScheduler, ActivationWindow);
     }
 
-    private void SimulateActivated() => Activated?.Invoke(this, EventArgs.Empty);
-    private void SimulateDeactivated() => Deactivated?.Invoke(this, EventArgs.Empty);
+    private void SimulateActivated() => _source.SimulateActivated();
+    private void SimulateDeactivated() => _source.SimulateDeactivated();
 
     // --- Activation window starts when state is inactive on enable ---
 
@@ -47,7 +40,7 @@ public class ActivationWindowIndicatorTests
     [Fact]
     public void Given_StateActive_When_Enabled_Then_NoActivationWindow()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
 
         indicator.Enable();
@@ -128,7 +121,7 @@ public class ActivationWindowIndicatorTests
     [Fact]
     public void Given_Active_When_GraceExpires_Then_ClearedFires()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
         var cleared = false;
@@ -145,7 +138,7 @@ public class ActivationWindowIndicatorTests
     [Fact]
     public void IsActive_DelegatesToInner()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
 
         indicator.Enable();
@@ -180,7 +173,7 @@ public class ActivationWindowIndicatorTests
     [Fact]
     public void Given_Persistent_When_GraceExpires_Then_StaysEnabled()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Persistent = true;
         indicator.Enable();

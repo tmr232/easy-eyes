@@ -6,26 +6,16 @@ public class BusyIndicatorTests
 {
     private static readonly TimeSpan GracePeriod = TimeSpan.FromSeconds(5);
 
-    private bool _stateActive;
-    private event EventHandler? Activated;
-    private event EventHandler? Deactivated;
-
+    private readonly FakeStateSource _source = new();
     private readonly FakeTimerScheduler _graceScheduler = new();
 
     private BusyIndicator CreateIndicator()
     {
         return new BusyIndicator(
-            isStateActive: () => _stateActive,
-            subscribeActivated: h => Activated += h,
-            unsubscribeActivated: h => Activated -= h,
-            subscribeDeactivated: h => Deactivated += h,
-            unsubscribeDeactivated: h => Deactivated -= h,
+            _source,
             graceScheduler: _graceScheduler,
             gracePeriod: GracePeriod);
     }
-
-    private void SimulateActivated() => Activated?.Invoke(this, EventArgs.Empty);
-    private void SimulateDeactivated() => Deactivated?.Invoke(this, EventArgs.Empty);
 
     // --- Initial state ---
 
@@ -48,7 +38,7 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_StateActive_When_Enabled_Then_IsActive()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
 
         indicator.Enable();
@@ -60,7 +50,7 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_StateInactive_When_Enabled_Then_IsNotActive()
     {
-        _stateActive = false;
+        _source.IsActive = false;
         var indicator = CreateIndicator();
 
         indicator.Enable();
@@ -72,11 +62,11 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_EnabledAndStateInactive_When_StateActivates_Then_IsActive()
     {
-        _stateActive = false;
+        _source.IsActive = false;
         var indicator = CreateIndicator();
         indicator.Enable();
 
-        SimulateActivated();
+        _source.SimulateActivated();
 
         Assert.True(indicator.IsActive);
     }
@@ -86,7 +76,7 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_EnabledAndActive_When_Disabled_Then_IsNotActive()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
 
@@ -101,11 +91,11 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_Active_When_StateDeactivates_Then_GraceTimerStarts()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
 
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
 
         Assert.True(_graceScheduler.IsRunning);
         Assert.Equal(GracePeriod, _graceScheduler.LastInterval);
@@ -115,12 +105,12 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_GraceTimerRunning_When_StateReactivates_Then_GraceTimerCancelled()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
 
-        SimulateActivated();
+        _source.SimulateActivated();
 
         Assert.False(_graceScheduler.IsRunning);
         Assert.True(indicator.IsActive);
@@ -129,10 +119,10 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_GraceTimerRunning_When_GraceExpires_Then_AutoDisables()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
 
         _graceScheduler.Expire();
 
@@ -143,12 +133,12 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_GraceTimerRunning_When_GraceExpires_Then_ClearedEventFires()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
         var cleared = false;
         indicator.Cleared += (_, _) => cleared = true;
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
 
         _graceScheduler.Expire();
 
@@ -166,7 +156,7 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_Enabled_When_EnabledAgain_Then_NoChange()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
 
@@ -181,12 +171,12 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_Disabled_When_StateChanges_Then_NoEffect()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
         indicator.Disable();
 
-        SimulateActivated();
+        _source.SimulateActivated();
 
         Assert.False(indicator.IsActive);
     }
@@ -194,10 +184,10 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_DisabledDuringGrace_When_GraceWouldExpire_Then_NoEffect()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
 
         indicator.Disable();
 
@@ -210,13 +200,13 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_AutoDisabled_When_ReEnabled_Then_ChecksCurrentState()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
         _graceScheduler.Expire(); // auto-disables
 
-        _stateActive = true;
+        _source.IsActive = true;
         indicator.Enable();
 
         Assert.True(indicator.IsEnabled);
@@ -226,13 +216,13 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_AutoDisabled_When_ReEnabledWithInactiveState_Then_NotActive()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
         _graceScheduler.Expire(); // auto-disables
 
-        _stateActive = false;
+        _source.IsActive = false;
         indicator.Enable();
 
         Assert.True(indicator.IsEnabled);
@@ -246,17 +236,14 @@ public class BusyIndicatorTests
     {
         var customGrace = TimeSpan.FromSeconds(10);
         var scheduler = new FakeTimerScheduler();
+        var source = new FakeStateSource { IsActive = true };
         var indicator = new BusyIndicator(
-            isStateActive: () => true,
-            subscribeActivated: h => Activated += h,
-            unsubscribeActivated: h => Activated -= h,
-            subscribeDeactivated: h => Deactivated += h,
-            unsubscribeDeactivated: h => Deactivated -= h,
+            source,
             graceScheduler: scheduler,
             gracePeriod: customGrace);
 
         indicator.Enable();
-        SimulateDeactivated();
+        source.SimulateDeactivated();
 
         Assert.Equal(customGrace, scheduler.LastInterval);
     }
@@ -266,17 +253,17 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_AutoDisabled_When_StateChanges_Then_NoEffect()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
         _graceScheduler.Expire(); // auto-disables and unsubscribes
 
         var cleared = false;
         indicator.Cleared += (_, _) => cleared = true;
 
-        SimulateActivated();
-        SimulateDeactivated();
+        _source.SimulateActivated();
+        _source.SimulateDeactivated();
 
         Assert.False(indicator.IsActive);
         Assert.False(cleared);
@@ -287,11 +274,11 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_Persistent_When_GraceExpires_Then_StaysEnabled()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Persistent = true;
         indicator.Enable();
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
 
         _graceScheduler.Expire();
 
@@ -302,13 +289,13 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_Persistent_When_GraceExpires_Then_ClearedFires()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Persistent = true;
         indicator.Enable();
         var cleared = false;
         indicator.Cleared += (_, _) => cleared = true;
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
 
         _graceScheduler.Expire();
 
@@ -318,16 +305,16 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_PersistentAndGraceExpired_When_StateReactivates_Then_BecomesActive()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Persistent = true;
         indicator.Enable();
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
         _graceScheduler.Expire();
 
         Assert.False(indicator.IsActive);
 
-        SimulateActivated();
+        _source.SimulateActivated();
 
         Assert.True(indicator.IsActive);
         Assert.True(indicator.IsEnabled);
@@ -336,11 +323,11 @@ public class BusyIndicatorTests
     [Fact]
     public void Given_NotPersistent_When_GraceExpires_Then_AutoDisables()
     {
-        _stateActive = true;
+        _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Persistent = false;
         indicator.Enable();
-        SimulateDeactivated();
+        _source.SimulateDeactivated();
 
         _graceScheduler.Expire();
 
