@@ -6,7 +6,21 @@ namespace EasyEyes;
 /// the aggregate state via polling.
 /// </summary>
 /// <remarks>
-/// Events fire on a ThreadPool thread; callers must dispatch to the UI thread if needed.
+/// <para>
+/// We use polling rather than registry change notifications because the
+/// CapabilityAccessManager keys are spread across per-app subkeys in both
+/// HKLM and HKCU, with new subkeys appearing when new apps access a device.
+/// <c>RegNotifyChangeKeyValue</c> fires on any write under the watched
+/// subtree — not just the values we care about — so we'd get noisy false
+/// positives and still need to re-read the actual values on each
+/// notification, making it effectively polling with extra complexity.
+/// A 1-second timer is simpler, reliable, and the cost of a few registry
+/// reads per second is negligible.
+/// </para>
+/// <para>
+/// Events fire on a ThreadPool thread; callers must dispatch to the UI
+/// thread if needed.
+/// </para>
 /// </remarks>
 public sealed class MediaDeviceMonitor : IDisposable
 {
