@@ -5,55 +5,34 @@ namespace EasyEyes.Tests;
 public class BusyIndicatorManagerTests
 {
     private static readonly TimeSpan GracePeriod = TimeSpan.FromSeconds(5);
-
-    private bool _cameraActive;
-    private event EventHandler? CameraActivated;
-    private event EventHandler? CameraDeactivated;
-
-    private bool _micActive;
-    private event EventHandler? MicActivated;
-    private event EventHandler? MicDeactivated;
-
     private static readonly TimeSpan ActivationWindow = TimeSpan.FromSeconds(30);
 
-    private readonly FakeTimerScheduler _cameraGrace = new();
-    private readonly FakeTimerScheduler _micGrace = new();
-    private readonly FakeTimerScheduler _cameraActivation = new();
-    private readonly FakeTimerScheduler _micActivation = new();
+    private bool _deviceActive;
+    private event EventHandler? DeviceActivated;
+    private event EventHandler? DeviceDeactivated;
+
+    private readonly FakeTimerScheduler _graceScheduler = new();
+    private readonly FakeTimerScheduler _activationScheduler = new();
 
     private BusyIndicatorManager CreateManager()
     {
-        var camera = new ActivationWindowIndicator(
+        var indicator = new ActivationWindowIndicator(
             new BusyIndicator(
-                isStateActive: () => _cameraActive,
-                subscribeActivated: h => CameraActivated += h,
-                unsubscribeActivated: h => CameraActivated -= h,
-                subscribeDeactivated: h => CameraDeactivated += h,
-                unsubscribeDeactivated: h => CameraDeactivated -= h,
-                graceScheduler: _cameraGrace,
+                isStateActive: () => _deviceActive,
+                subscribeActivated: h => DeviceActivated += h,
+                unsubscribeActivated: h => DeviceActivated -= h,
+                subscribeDeactivated: h => DeviceDeactivated += h,
+                unsubscribeDeactivated: h => DeviceDeactivated -= h,
+                graceScheduler: _graceScheduler,
                 gracePeriod: GracePeriod),
-            _cameraActivation,
+            _activationScheduler,
             ActivationWindow);
 
-        var mic = new ActivationWindowIndicator(
-            new BusyIndicator(
-                isStateActive: () => _micActive,
-                subscribeActivated: h => MicActivated += h,
-                unsubscribeActivated: h => MicActivated -= h,
-                subscribeDeactivated: h => MicDeactivated += h,
-                unsubscribeDeactivated: h => MicDeactivated -= h,
-                graceScheduler: _micGrace,
-                gracePeriod: GracePeriod),
-            _micActivation,
-            ActivationWindow);
-
-        return new BusyIndicatorManager(camera, mic);
+        return new BusyIndicatorManager(indicator);
     }
 
-    private void SimulateCameraActivated() => CameraActivated?.Invoke(this, EventArgs.Empty);
-    private void SimulateCameraDeactivated() => CameraDeactivated?.Invoke(this, EventArgs.Empty);
-    private void SimulateMicActivated() => MicActivated?.Invoke(this, EventArgs.Empty);
-    private void SimulateMicDeactivated() => MicDeactivated?.Invoke(this, EventArgs.Empty);
+    private void SimulateDeviceActivated() => DeviceActivated?.Invoke(this, EventArgs.Empty);
+    private void SimulateDeviceDeactivated() => DeviceDeactivated?.Invoke(this, EventArgs.Empty);
 
     // --- Initial state ---
 
@@ -62,121 +41,47 @@ public class BusyIndicatorManagerTests
     {
         var manager = CreateManager();
         Assert.False(manager.IsBusy);
-        Assert.False(manager.IsMicCameraEnabled);
+        Assert.False(manager.IsEnabled);
     }
 
-    // --- Enable with active devices ---
+    // --- Enable with active device ---
 
     [Fact]
-    public void Given_CameraActive_When_Enabled_Then_IsBusy()
+    public void Given_DeviceActive_When_Enabled_Then_IsBusy()
     {
-        _cameraActive = true;
+        _deviceActive = true;
         var manager = CreateManager();
 
-        manager.EnableMicCamera();
+        manager.EnableMeeting();
 
         Assert.True(manager.IsBusy);
-        Assert.True(manager.IsMicCameraEnabled);
+        Assert.True(manager.IsEnabled);
     }
 
     [Fact]
-    public void Given_MicActive_When_Enabled_Then_IsBusy()
-    {
-        _micActive = true;
-        var manager = CreateManager();
-
-        manager.EnableMicCamera();
-
-        Assert.True(manager.IsBusy);
-    }
-
-    [Fact]
-    public void Given_BothActive_When_Enabled_Then_IsBusy()
-    {
-        _cameraActive = true;
-        _micActive = true;
-        var manager = CreateManager();
-
-        manager.EnableMicCamera();
-
-        Assert.True(manager.IsBusy);
-    }
-
-    [Fact]
-    public void Given_NeitherActive_When_Enabled_Then_NotBusy()
+    public void Given_DeviceInactive_When_Enabled_Then_NotBusy()
     {
         var manager = CreateManager();
 
-        manager.EnableMicCamera();
+        manager.EnableMeeting();
 
-        Assert.True(manager.IsMicCameraEnabled);
+        Assert.True(manager.IsEnabled);
         Assert.False(manager.IsBusy);
-    }
-
-    // --- One device clears, other stays active ---
-
-    [Fact]
-    public void Given_BothActive_When_CameraClears_Then_StillBusy()
-    {
-        _cameraActive = true;
-        _micActive = true;
-        var manager = CreateManager();
-        manager.EnableMicCamera();
-
-        SimulateCameraDeactivated();
-        _cameraGrace.Expire();
-
-        Assert.True(manager.IsBusy);
-    }
-
-    [Fact]
-    public void Given_BothActive_When_BothClear_Then_BusyCleared()
-    {
-        _cameraActive = true;
-        _micActive = true;
-        var manager = CreateManager();
-        manager.EnableMicCamera();
-        var cleared = false;
-        manager.BusyCleared += (_, _) => cleared = true;
-
-        SimulateCameraDeactivated();
-        _cameraGrace.Expire();
-        Assert.False(cleared);
-
-        SimulateMicDeactivated();
-        _micGrace.Expire();
-        Assert.True(cleared);
     }
 
     // --- BusyCleared event ---
 
     [Fact]
-    public void Given_OnlyCameraActive_When_CameraClears_Then_BusyCleared()
+    public void Given_DeviceActive_When_DeviceClears_Then_BusyCleared()
     {
-        _cameraActive = true;
+        _deviceActive = true;
         var manager = CreateManager();
-        manager.EnableMicCamera();
+        manager.EnableMeeting();
         var cleared = false;
         manager.BusyCleared += (_, _) => cleared = true;
 
-        SimulateCameraDeactivated();
-        _cameraGrace.Expire();
-
-        Assert.True(cleared);
-        Assert.False(manager.IsBusy);
-    }
-
-    [Fact]
-    public void Given_OnlyMicActive_When_MicClears_Then_BusyCleared()
-    {
-        _micActive = true;
-        var manager = CreateManager();
-        manager.EnableMicCamera();
-        var cleared = false;
-        manager.BusyCleared += (_, _) => cleared = true;
-
-        SimulateMicDeactivated();
-        _micGrace.Expire();
+        SimulateDeviceDeactivated();
+        _graceScheduler.Expire();
 
         Assert.True(cleared);
         Assert.False(manager.IsBusy);
@@ -187,28 +92,28 @@ public class BusyIndicatorManagerTests
     [Fact]
     public void Given_Busy_When_Disabled_Then_BusyCleared()
     {
-        _cameraActive = true;
+        _deviceActive = true;
         var manager = CreateManager();
-        manager.EnableMicCamera();
+        manager.EnableMeeting();
         var cleared = false;
         manager.BusyCleared += (_, _) => cleared = true;
 
-        manager.DisableMicCamera();
+        manager.DisableMeeting();
 
         Assert.True(cleared);
         Assert.False(manager.IsBusy);
-        Assert.False(manager.IsMicCameraEnabled);
+        Assert.False(manager.IsEnabled);
     }
 
     [Fact]
     public void Given_NotBusy_When_Disabled_Then_NoBusyCleared()
     {
         var manager = CreateManager();
-        manager.EnableMicCamera();
+        manager.EnableMeeting();
         var cleared = false;
         manager.BusyCleared += (_, _) => cleared = true;
 
-        manager.DisableMicCamera();
+        manager.DisableMeeting();
 
         Assert.False(cleared);
     }
@@ -216,30 +121,30 @@ public class BusyIndicatorManagerTests
     // --- Grace period: device comes back within grace ---
 
     [Fact]
-    public void Given_CameraDeactivated_When_CameraReactivatesWithinGrace_Then_StillBusy()
+    public void Given_DeviceDeactivated_When_DeviceReactivatesWithinGrace_Then_StillBusy()
     {
-        _cameraActive = true;
+        _deviceActive = true;
         var manager = CreateManager();
-        manager.EnableMicCamera();
+        manager.EnableMeeting();
 
-        SimulateCameraDeactivated();
+        SimulateDeviceDeactivated();
         Assert.True(manager.IsBusy);
 
-        SimulateCameraActivated();
+        SimulateDeviceActivated();
         Assert.True(manager.IsBusy);
-        Assert.False(_cameraGrace.IsRunning);
+        Assert.False(_graceScheduler.IsRunning);
     }
 
-    // --- Mic activates after enable ---
+    // --- Device activates after enable ---
 
     [Fact]
-    public void Given_EnabledWithNothingActive_When_MicActivates_Then_IsBusy()
+    public void Given_EnabledWithNothingActive_When_DeviceActivates_Then_IsBusy()
     {
         var manager = CreateManager();
-        manager.EnableMicCamera();
+        manager.EnableMeeting();
         Assert.False(manager.IsBusy);
 
-        SimulateMicActivated();
+        SimulateDeviceActivated();
 
         Assert.True(manager.IsBusy);
     }
@@ -247,31 +152,28 @@ public class BusyIndicatorManagerTests
     // --- Activation window ---
 
     [Fact]
-    public void Given_EnabledWithNothingActive_When_BothActivationWindowsExpire_Then_ActivationExpiredFires()
+    public void Given_EnabledWithNothingActive_When_ActivationWindowExpires_Then_ActivationExpiredFires()
     {
         var manager = CreateManager();
         var expired = false;
         manager.ActivationExpired += (_, _) => expired = true;
-        manager.EnableMicCamera();
+        manager.EnableMeeting();
 
-        _cameraActivation.Expire();
-        Assert.False(expired);
+        _activationScheduler.Expire();
 
-        _micActivation.Expire();
         Assert.True(expired);
-        Assert.False(manager.IsMicCameraEnabled);
+        Assert.False(manager.IsEnabled);
     }
 
     [Fact]
-    public void Given_EnabledWithNothingActive_When_MicActivatesBeforeWindow_Then_NoActivationExpired()
+    public void Given_EnabledWithNothingActive_When_DeviceActivatesBeforeWindow_Then_NoActivationExpired()
     {
         var manager = CreateManager();
         var expired = false;
         manager.ActivationExpired += (_, _) => expired = true;
-        manager.EnableMicCamera();
+        manager.EnableMeeting();
 
-        SimulateMicActivated();
-        _cameraActivation.Expire();
+        SimulateDeviceActivated();
 
         Assert.False(expired);
         Assert.True(manager.IsBusy);
@@ -282,7 +184,7 @@ public class BusyIndicatorManagerTests
     [Fact]
     public void SetMeetingMode_Off_DisablesIndicator()
     {
-        _micActive = true;
+        _deviceActive = true;
         var manager = CreateManager();
         manager.SetMeetingMode(MeetingMode.UntilEnd);
         Assert.True(manager.IsBusy);
@@ -291,53 +193,51 @@ public class BusyIndicatorManagerTests
 
         Assert.Equal(MeetingMode.Off, manager.CurrentMeetingMode);
         Assert.False(manager.IsBusy);
-        Assert.False(manager.IsMicCameraEnabled);
+        Assert.False(manager.IsEnabled);
     }
 
     [Fact]
     public void SetMeetingMode_UntilEnd_AutoDisablesOnGraceExpiry()
     {
-        _micActive = true;
+        _deviceActive = true;
         var manager = CreateManager();
         manager.SetMeetingMode(MeetingMode.UntilEnd);
         Assert.Equal(MeetingMode.UntilEnd, manager.CurrentMeetingMode);
 
-        SimulateMicDeactivated();
-        _micGrace.Expire();
-        SimulateCameraDeactivated();
-        _cameraGrace.Expire();
+        SimulateDeviceDeactivated();
+        _graceScheduler.Expire();
 
         Assert.False(manager.IsBusy);
-        Assert.False(manager.IsMicCameraEnabled);
+        Assert.False(manager.IsEnabled);
     }
 
     [Fact]
     public void SetMeetingMode_Always_StaysEnabledAfterGraceExpiry()
     {
-        _micActive = true;
+        _deviceActive = true;
         var manager = CreateManager();
         manager.SetMeetingMode(MeetingMode.Always);
         Assert.Equal(MeetingMode.Always, manager.CurrentMeetingMode);
 
-        SimulateMicDeactivated();
-        _micGrace.Expire();
+        SimulateDeviceDeactivated();
+        _graceScheduler.Expire();
 
         Assert.False(manager.IsBusy);
-        Assert.True(manager.IsMicCameraEnabled);
+        Assert.True(manager.IsEnabled);
     }
 
     [Fact]
     public void SetMeetingMode_Always_ReactivatesWhenDeviceComesBack()
     {
-        _micActive = true;
+        _deviceActive = true;
         var manager = CreateManager();
         manager.SetMeetingMode(MeetingMode.Always);
 
-        SimulateMicDeactivated();
-        _micGrace.Expire();
+        SimulateDeviceDeactivated();
+        _graceScheduler.Expire();
         Assert.False(manager.IsBusy);
 
-        SimulateMicActivated();
+        SimulateDeviceActivated();
         Assert.True(manager.IsBusy);
     }
 
@@ -347,27 +247,23 @@ public class BusyIndicatorManagerTests
         var manager = CreateManager();
         manager.SetMeetingMode(MeetingMode.Always);
 
-        // Activation window timers should not be running
-        Assert.False(_cameraActivation.IsRunning);
-        Assert.False(_micActivation.IsRunning);
+        Assert.False(_activationScheduler.IsRunning);
     }
 
     [Fact]
     public void SetMeetingMode_Always_BusyClearedFiresButStaysEnabled()
     {
-        _micActive = true;
+        _deviceActive = true;
         var manager = CreateManager();
         manager.SetMeetingMode(MeetingMode.Always);
         var clearedCount = 0;
         manager.BusyCleared += (_, _) => clearedCount++;
 
-        SimulateMicDeactivated();
-        _micGrace.Expire();
-        SimulateCameraDeactivated();
-        _cameraGrace.Expire();
+        SimulateDeviceDeactivated();
+        _graceScheduler.Expire();
 
         Assert.True(clearedCount > 0);
-        Assert.True(manager.IsMicCameraEnabled);
+        Assert.True(manager.IsEnabled);
     }
 
     [Fact]
@@ -377,14 +273,14 @@ public class BusyIndicatorManagerTests
 
         manager.SetMeetingMode(MeetingMode.UntilEnd);
         Assert.Equal(MeetingMode.UntilEnd, manager.CurrentMeetingMode);
-        Assert.True(manager.IsMicCameraEnabled);
+        Assert.True(manager.IsEnabled);
 
         manager.SetMeetingMode(MeetingMode.Always);
         Assert.Equal(MeetingMode.Always, manager.CurrentMeetingMode);
-        Assert.True(manager.IsMicCameraEnabled);
+        Assert.True(manager.IsEnabled);
 
         manager.SetMeetingMode(MeetingMode.Off);
         Assert.Equal(MeetingMode.Off, manager.CurrentMeetingMode);
-        Assert.False(manager.IsMicCameraEnabled);
+        Assert.False(manager.IsEnabled);
     }
 }

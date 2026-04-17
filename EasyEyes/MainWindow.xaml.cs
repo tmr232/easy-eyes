@@ -44,11 +44,9 @@ public partial class MainWindow : Window
 
         _busyIndicatorManager = new BusyIndicatorManager(
             _mediaDeviceMonitor,
-            cameraGraceScheduler: new DispatcherTimerScheduler(),
-            microphoneGraceScheduler: new DispatcherTimerScheduler(),
+            graceScheduler: new DispatcherTimerScheduler(),
             gracePeriod: TimeSpan.FromSeconds(5),
-            cameraActivationScheduler: new DispatcherTimerScheduler(),
-            microphoneActivationScheduler: new DispatcherTimerScheduler(),
+            activationScheduler: new DispatcherTimerScheduler(),
             activationWindow: TimeSpan.FromSeconds(30));
 
         stateMachine = new EasyEyesStateMachine(_actions, () => _busyIndicatorManager.IsBusy);

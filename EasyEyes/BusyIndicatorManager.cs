@@ -23,30 +23,24 @@ public enum MeetingMode
 }
 
 /// <summary>
-/// Tracks enabled busy indicators and provides an aggregate busy state.
-/// When any enabled indicator is active, <see cref="IsBusy"/> is true.
-/// When the last active indicator clears, <see cref="BusyCleared"/> fires.
+/// Tracks an "In a meeting" busy indicator backed by a
+/// <see cref="MediaDeviceMonitor"/>. When the indicator is active,
+/// <see cref="IsBusy"/> is true. When it clears, <see cref="BusyCleared"/>
+/// fires.
 /// </summary>
-/// <remarks>
-/// The mic/camera indicator is exposed as a single user-facing toggle
-/// but internally uses two <see cref="ActivationWindowIndicator"/> instances
-/// (one for camera, one for mic). Either device being in use keeps the
-/// indicator active.
-/// </remarks>
 public class BusyIndicatorManager
 {
-    private readonly ActivationWindowIndicator _cameraIndicator;
-    private readonly ActivationWindowIndicator _microphoneIndicator;
+    private readonly ActivationWindowIndicator _indicator;
 
     /// <summary>
-    /// True if any enabled indicator is currently active.
+    /// True if the indicator is currently active.
     /// </summary>
-    public bool IsBusy => _cameraIndicator.IsActive || _microphoneIndicator.IsActive;
+    public bool IsBusy => _indicator.IsActive;
 
     /// <summary>
-    /// Whether the mic/camera indicator is currently enabled.
+    /// Whether the indicator is currently enabled.
     /// </summary>
-    public bool IsMicCameraEnabled => _cameraIndicator.IsEnabled || _microphoneIndicator.IsEnabled;
+    public bool IsEnabled => _indicator.IsEnabled;
 
     /// <summary>
     /// The current meeting indicator mode.
@@ -59,7 +53,7 @@ public class BusyIndicatorManager
     public event EventHandler? BusyCleared;
 
     /// <summary>
-    /// Fires when the activation window expires without mic or camera
+    /// Fires when the activation window expires without any device
     /// becoming active. The indicator has been auto-disabled.
     /// </summary>
     public event EventHandler? ActivationExpired;
@@ -70,56 +64,38 @@ public class BusyIndicatorManager
     /// </summary>
     public BusyIndicatorManager(
         MediaDeviceMonitor monitor,
-        ITimerScheduler cameraGraceScheduler,
-        ITimerScheduler microphoneGraceScheduler,
+        ITimerScheduler graceScheduler,
         TimeSpan gracePeriod,
-        ITimerScheduler cameraActivationScheduler,
-        ITimerScheduler microphoneActivationScheduler,
+        ITimerScheduler activationScheduler,
         TimeSpan activationWindow)
         : this(
             new ActivationWindowIndicator(
                 new BusyIndicator(
-                    isStateActive: () => MediaDeviceMonitor.IsCameraInUse,
-                    subscribeActivated: h => monitor.CameraActivated += h,
-                    unsubscribeActivated: h => monitor.CameraActivated -= h,
-                    subscribeDeactivated: h => monitor.CameraDeactivated += h,
-                    unsubscribeDeactivated: h => monitor.CameraDeactivated -= h,
-                    graceScheduler: cameraGraceScheduler,
+                    isStateActive: () => monitor.IsInUse,
+                    subscribeActivated: h => monitor.Activated += h,
+                    unsubscribeActivated: h => monitor.Activated -= h,
+                    subscribeDeactivated: h => monitor.Deactivated += h,
+                    unsubscribeDeactivated: h => monitor.Deactivated -= h,
+                    graceScheduler: graceScheduler,
                     gracePeriod: gracePeriod),
-                cameraActivationScheduler,
-                activationWindow),
-            new ActivationWindowIndicator(
-                new BusyIndicator(
-                    isStateActive: () => MediaDeviceMonitor.IsMicrophoneInUse,
-                    subscribeActivated: h => monitor.MicrophoneActivated += h,
-                    unsubscribeActivated: h => monitor.MicrophoneActivated -= h,
-                    subscribeDeactivated: h => monitor.MicrophoneDeactivated += h,
-                    unsubscribeDeactivated: h => monitor.MicrophoneDeactivated -= h,
-                    graceScheduler: microphoneGraceScheduler,
-                    gracePeriod: gracePeriod),
-                microphoneActivationScheduler,
+                activationScheduler,
                 activationWindow))
     {
     }
 
     /// <summary>
-    /// Creates a manager with pre-built indicators (for testing).
+    /// Creates a manager with a pre-built indicator (for testing).
     /// </summary>
-    public BusyIndicatorManager(
-        ActivationWindowIndicator cameraIndicator,
-        ActivationWindowIndicator microphoneIndicator)
+    public BusyIndicatorManager(ActivationWindowIndicator indicator)
     {
-        _cameraIndicator = cameraIndicator;
-        _microphoneIndicator = microphoneIndicator;
+        _indicator = indicator;
 
-        _cameraIndicator.Cleared += OnIndicatorCleared;
-        _microphoneIndicator.Cleared += OnIndicatorCleared;
-        _cameraIndicator.ActivationExpired += OnActivationExpired;
-        _microphoneIndicator.ActivationExpired += OnActivationExpired;
+        _indicator.Cleared += (_, e) => BusyCleared?.Invoke(this, e);
+        _indicator.ActivationExpired += (_, e) => ActivationExpired?.Invoke(this, e);
     }
 
     /// <summary>
-    /// Sets the meeting indicator mode.  <see cref="MeetingMode.Off"/>
+    /// Sets the meeting indicator mode. <see cref="MeetingMode.Off"/>
     /// disables the indicator; other values enable it with the
     /// corresponding persistence behaviour.
     /// </summary>
@@ -127,52 +103,33 @@ public class BusyIndicatorManager
     {
         if (mode == MeetingMode.Off)
         {
-            DisableMicCamera();
+            DisableMeeting();
             return;
         }
 
         CurrentMeetingMode = mode;
-        var persistent = mode == MeetingMode.Always;
-        _cameraIndicator.Persistent = persistent;
-        _microphoneIndicator.Persistent = persistent;
-        _cameraIndicator.Enable();
-        _microphoneIndicator.Enable();
+        _indicator.Persistent = mode == MeetingMode.Always;
+        _indicator.Enable();
     }
 
     /// <summary>
-    /// Enables the mic/camera indicator in <see cref="MeetingMode.UntilEnd"/>
-    /// mode. Both camera and microphone are monitored; either being in use
-    /// makes the indicator active.
+    /// Enables the indicator in <see cref="MeetingMode.UntilEnd"/> mode.
     /// </summary>
-    public void EnableMicCamera()
+    public void EnableMeeting()
     {
         SetMeetingMode(MeetingMode.UntilEnd);
     }
 
     /// <summary>
-    /// Disables the mic/camera indicator.
+    /// Disables the indicator.
     /// </summary>
-    public void DisableMicCamera()
+    public void DisableMeeting()
     {
         CurrentMeetingMode = MeetingMode.Off;
         var wasBusy = IsBusy;
-        _cameraIndicator.Persistent = false;
-        _microphoneIndicator.Persistent = false;
-        _cameraIndicator.Disable();
-        _microphoneIndicator.Disable();
+        _indicator.Persistent = false;
+        _indicator.Disable();
         if (wasBusy)
             BusyCleared?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OnIndicatorCleared(object? sender, EventArgs e)
-    {
-        if (!IsBusy)
-            BusyCleared?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OnActivationExpired(object? sender, EventArgs e)
-    {
-        if (!IsMicCameraEnabled)
-            ActivationExpired?.Invoke(this, EventArgs.Empty);
     }
 }
