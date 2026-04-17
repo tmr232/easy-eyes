@@ -17,7 +17,7 @@ public class EasyEyesActions : IEasyEyesActions
         Action showOverlay,
         Action hideOverlay,
         Action showToast,
-        Action<Trigger> fireTrigger)
+        TriggerRelay triggerRelay)
     {
         _showOverlay = showOverlay;
         _hideOverlay = hideOverlay;
@@ -25,11 +25,11 @@ public class EasyEyesActions : IEasyEyesActions
 
         _activityTimer = new CountdownTimer(
             timeProvider, activityScheduler, activityDuration,
-            () => fireTrigger(Trigger.ActivityTimerExpired));
+            () => triggerRelay.Fire(Trigger.ActivityTimerExpired));
 
         _restTimer = new CountdownTimer(
             timeProvider, restScheduler, restDuration,
-            () => fireTrigger(Trigger.RestTimerExpired));
+            () => triggerRelay.Fire(Trigger.RestTimerExpired));
     }
 
     public void ShowOverlay() => _showOverlay();

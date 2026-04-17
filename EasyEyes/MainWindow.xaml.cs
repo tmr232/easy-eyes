@@ -25,7 +25,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        EasyEyesStateMachine? stateMachine = null;
+        var triggerRelay = new TriggerRelay();
         _actions = new EasyEyesActions(
             TimeProvider.System,
             activityScheduler: new DispatcherTimerScheduler(),
@@ -35,12 +35,7 @@ public partial class MainWindow : Window
             showOverlay: DoShowOverlay,
             hideOverlay: DoHideOverlay,
             showToast: () => SystemSounds.Asterisk.Play(),
-            fireTrigger: trigger =>
-            {
-                App.Log($"FireTrigger: {trigger}, CurrentState: {stateMachine!.CurrentState}");
-                stateMachine.Fire(trigger);
-                App.Log($"  -> NewState: {stateMachine.CurrentState}");
-            });
+            triggerRelay: triggerRelay);
 
         _busyIndicatorManager = new BusyIndicatorManager(
             _mediaDeviceMonitor,
@@ -49,8 +44,14 @@ public partial class MainWindow : Window
             activationScheduler: new DispatcherTimerScheduler(),
             activationWindow: TimeSpan.FromSeconds(30));
 
-        stateMachine = new EasyEyesStateMachine(_actions, () => _busyIndicatorManager.IsBusy);
-        _stateMachine = stateMachine;
+        _stateMachine = new EasyEyesStateMachine(_actions, () => _busyIndicatorManager.IsBusy);
+
+        triggerRelay.Connect(trigger =>
+        {
+            App.Log($"FireTrigger: {trigger}, CurrentState: {_stateMachine.CurrentState}");
+            _stateMachine.Fire(trigger);
+            App.Log($"  -> NewState: {_stateMachine.CurrentState}");
+        });
 
         _busyIndicatorManager.BusyCleared += (_, _) =>
         {
