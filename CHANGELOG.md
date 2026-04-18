@@ -21,6 +21,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 - Add `Persistent` mode to `BusyIndicator`: when persistent, the indicator stays enabled after grace expiry and re-activates when mic/camera becomes active again
 - Add `MeetingMode` enum and `SetMeetingMode()` API on `BusyIndicatorManager`
 
+### Removed
+
+- Remove stale plan files (`PLAN.md`, `PLAN-busy-state.md`, `PLAN-multi-monitor.md`); architecture now documented in `README.md`
+
 ### Fixed
 
 - Fix overlay showing while busy indicator ("in a meeting") is active by integrating `Busy` state into the state machine
