@@ -7,6 +7,8 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+## [2026.04.18]
+
 ### Changed
 
 - Keep tray menu open when clicking toggle items (pause until unlock, in a meeting, pause media on lock) so they can be toggled multiple times without reopening the menu
