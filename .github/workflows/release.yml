@@ -45,7 +45,7 @@ jobs:
         run: dotnet test --no-build --configuration Release
 
       - name: Publish
-        run: dotnet publish EasyEyes/EasyEyes.csproj --configuration Release --output ./publish
+        run: dotnet publish EasyEyes/EasyEyes.csproj -p:PublishProfile=Release
 
       - name: Extract release notes
         id: notes
