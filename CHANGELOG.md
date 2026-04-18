@@ -15,6 +15,8 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ### Added
 
+- Add solid blue border around each screen to the overlay
+- Add `EasyEyes.OverlayTester` project — a standalone app that shows the overlay with fade-in animation; press Esc to close
 - Add `MediaPlaybackMonitor` for detecting system media playback via Windows SMTC API
 - Add `EnterBusy` trigger: enabling "In a meeting" while the overlay is displayed now hides the overlay and enters the Busy state without resetting the timer
 - Add 3-way "In a meeting" toggle: Off → Until end (auto-disables when meeting ends) → Always (stays active until manually toggled off)

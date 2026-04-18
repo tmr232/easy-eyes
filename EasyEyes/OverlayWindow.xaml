@@ -18,5 +18,11 @@
                 </RadialGradientBrush>
             </Rectangle.Fill>
         </Rectangle>
+        <Border x:Name="ScreenBorder"
+                BorderBrush="#FF4A90D9"
+                BorderThickness="6"
+                Background="Transparent"
+                IsHitTestVisible="False"
+                Opacity="0" />
     </Grid>
 </Window>
