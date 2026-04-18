@@ -85,7 +85,7 @@ Press **Esc** to close.
 ## Publish
 
 ```
-dotnet publish EasyEyes/EasyEyes.csproj --configuration Release --output ./publish
+dotnet publish EasyEyes/EasyEyes.csproj -p:PublishProfile=Release
 ```
 
 This produces a single-file, self-contained executable in the `publish/` directory.
