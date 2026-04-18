@@ -77,6 +77,7 @@ public partial class OverlayWindow : Window
         CompositionTarget.Rendering += OnRendering;
         var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromSeconds(5));
         Overlay.BeginAnimation(OpacityProperty, fadeIn);
+        ScreenBorder.BeginAnimation(OpacityProperty, fadeIn);
     }
 
     public void HideOverlay()
@@ -84,6 +85,8 @@ public partial class OverlayWindow : Window
         CompositionTarget.Rendering -= OnRendering;
         Overlay.BeginAnimation(OpacityProperty, null);
         Overlay.Opacity = 0;
+        ScreenBorder.BeginAnimation(OpacityProperty, null);
+        ScreenBorder.Opacity = 0;
     }
 
     private void OnRendering(object? sender, EventArgs e)

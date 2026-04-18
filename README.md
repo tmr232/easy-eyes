@@ -6,7 +6,7 @@ The app lives in the system tray with pause, resume, and snooze controls.
 
 ## Features
 
-- **Multi-monitor overlay** — gradient overlay with a spotlight following the cursor, displayed across all monitors simultaneously
+- **Multi-monitor overlay** — gradient overlay with a spotlight following the cursor and a blue border, displayed across all monitors simultaneously
 - **Pause until unlock** — suspends the timer until the next screen unlock
 - **Pause for duration** — extends the timer by a custom number of minutes
 - **In a meeting** — 3-way toggle (Off → Until end → Always) that defers the overlay while mic/camera is active, with a configurable grace period
@@ -71,6 +71,16 @@ dotnet build
 ```
 dotnet test
 ```
+
+## Overlay Tester
+
+A standalone app that shows the overlay immediately (with the fade-in animation) for visual testing:
+
+```
+dotnet run --project EasyEyes.OverlayTester
+```
+
+Press **Esc** to close.
 
 ## Publish
 
