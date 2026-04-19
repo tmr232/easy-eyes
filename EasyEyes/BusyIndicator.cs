@@ -1,14 +1,14 @@
 namespace EasyEyes;
 
 /// <summary>
-/// A generic one-shot, opt-in busy indicator that monitors a boolean state
-/// (active/inactive) and auto-disables after a grace period when the state
-/// becomes inactive.
+/// An opt-in busy indicator that monitors a boolean state (active/inactive)
+/// and uses a grace period to smooth transitions.
 ///
 /// The indicator is enabled by the user (via tray menu). Once the monitored
 /// activity ends, a grace timer starts. If the activity resumes within the
 /// grace period, the timer is cancelled. If the grace timer expires, the
-/// indicator auto-disables and fires the <see cref="Cleared"/> event.
+/// indicator clears (fires <see cref="Cleared"/>) but stays enabled so it
+/// will re-activate when the state becomes active again.
 /// </summary>
 /// <remarks>
 /// The caller is responsible for thread safety. State-change event handlers
@@ -23,8 +23,6 @@ public class BusyIndicator
 
     private bool _enabled;
     private bool _subscribed;
-    private bool _persistent;
-
     /// <summary>
     /// True if the indicator is enabled AND the monitored state is currently
     /// active (or within the grace period after deactivation).
@@ -37,24 +35,13 @@ public class BusyIndicator
     public bool IsEnabled => _enabled;
 
     /// <summary>
-    /// When true, the indicator does not auto-disable on grace expiry.
-    /// It stays enabled and will re-activate when the monitored state
-    /// becomes active again.
-    /// </summary>
-    public bool Persistent
-    {
-        get => _persistent;
-        set => _persistent = value;
-    }
-
-    /// <summary>
     /// Fires when the indicator transitions from inactive to active.
     /// </summary>
     public event EventHandler? BecameActive;
 
     /// <summary>
     /// Fires when the indicator transitions from active to inactive
-    /// (i.e., when the grace period expires and the indicator auto-disables).
+    /// (i.e., when the grace period expires).
     /// </summary>
     public event EventHandler? Cleared;
 
@@ -148,16 +135,6 @@ public class BusyIndicator
     private void OnGraceExpired()
     {
         IsActive = false;
-
-        if (_persistent)
-        {
-            // Stay enabled — will re-activate when the state becomes active again.
-            Cleared?.Invoke(this, EventArgs.Empty);
-            return;
-        }
-
-        _enabled = false;
-        Unsubscribe();
         Cleared?.Invoke(this, EventArgs.Empty);
     }
 }

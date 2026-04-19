@@ -117,7 +117,7 @@ public class BusyIndicatorTests
     }
 
     [Fact]
-    public void Given_GraceTimerRunning_When_GraceExpires_Then_AutoDisables()
+    public void Given_GraceTimerRunning_When_GraceExpires_Then_ClearsButStaysEnabled()
     {
         _source.IsActive = true;
         var indicator = CreateIndicator();
@@ -127,7 +127,7 @@ public class BusyIndicatorTests
         _graceScheduler.Expire();
 
         Assert.False(indicator.IsActive);
-        Assert.False(indicator.IsEnabled);
+        Assert.True(indicator.IsEnabled);
     }
 
     [Fact]
@@ -195,35 +195,31 @@ public class BusyIndicatorTests
         Assert.False(indicator.IsActive);
     }
 
-    // --- Re-enable after auto-disable ---
+    // --- State after grace expiry ---
 
     [Fact]
-    public void Given_AutoDisabled_When_ReEnabled_Then_ChecksCurrentState()
+    public void Given_GraceExpired_When_StateReactivates_Then_IsActive()
     {
         _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
         _source.SimulateDeactivated();
-        _graceScheduler.Expire(); // auto-disables
+        _graceScheduler.Expire();
 
         _source.IsActive = true;
-        indicator.Enable();
+        _source.SimulateActivated();
 
-        Assert.True(indicator.IsEnabled);
         Assert.True(indicator.IsActive);
     }
 
     [Fact]
-    public void Given_AutoDisabled_When_ReEnabledWithInactiveState_Then_NotActive()
+    public void Given_GraceExpired_Then_StaysEnabledAndInactive()
     {
         _source.IsActive = true;
         var indicator = CreateIndicator();
         indicator.Enable();
         _source.SimulateDeactivated();
-        _graceScheduler.Expire(); // auto-disables
-
-        _source.IsActive = false;
-        indicator.Enable();
+        _graceScheduler.Expire();
 
         Assert.True(indicator.IsEnabled);
         Assert.False(indicator.IsActive);
@@ -248,90 +244,20 @@ public class BusyIndicatorTests
         Assert.Equal(customGrace, scheduler.LastInterval);
     }
 
-    // --- Unsubscription ---
+    // --- Reactivation after grace expiry ---
 
     [Fact]
-    public void Given_AutoDisabled_When_StateChanges_Then_NoEffect()
+    public void Given_GraceExpired_When_StateReactivates_Then_BecomesActive()
     {
         _source.IsActive = true;
         var indicator = CreateIndicator();
-        indicator.Enable();
-        _source.SimulateDeactivated();
-        _graceScheduler.Expire(); // auto-disables and unsubscribes
-
-        var cleared = false;
-        indicator.Cleared += (_, _) => cleared = true;
-
-        _source.SimulateActivated();
-        _source.SimulateDeactivated();
-
-        Assert.False(indicator.IsActive);
-        Assert.False(cleared);
-    }
-
-    // --- Persistent mode ---
-
-    [Fact]
-    public void Given_Persistent_When_GraceExpires_Then_StaysEnabled()
-    {
-        _source.IsActive = true;
-        var indicator = CreateIndicator();
-        indicator.Persistent = true;
-        indicator.Enable();
-        _source.SimulateDeactivated();
-
-        _graceScheduler.Expire();
-
-        Assert.False(indicator.IsActive);
-        Assert.True(indicator.IsEnabled);
-    }
-
-    [Fact]
-    public void Given_Persistent_When_GraceExpires_Then_ClearedFires()
-    {
-        _source.IsActive = true;
-        var indicator = CreateIndicator();
-        indicator.Persistent = true;
-        indicator.Enable();
-        var cleared = false;
-        indicator.Cleared += (_, _) => cleared = true;
-        _source.SimulateDeactivated();
-
-        _graceScheduler.Expire();
-
-        Assert.True(cleared);
-    }
-
-    [Fact]
-    public void Given_PersistentAndGraceExpired_When_StateReactivates_Then_BecomesActive()
-    {
-        _source.IsActive = true;
-        var indicator = CreateIndicator();
-        indicator.Persistent = true;
         indicator.Enable();
         _source.SimulateDeactivated();
         _graceScheduler.Expire();
-
-        Assert.False(indicator.IsActive);
 
         _source.SimulateActivated();
 
         Assert.True(indicator.IsActive);
-        Assert.True(indicator.IsEnabled);
     }
 
-    [Fact]
-    public void Given_NotPersistent_When_GraceExpires_Then_AutoDisables()
-    {
-        _source.IsActive = true;
-        var indicator = CreateIndicator();
-        indicator.Persistent = false;
-        indicator.Enable();
-        _source.SimulateDeactivated();
-
-        _graceScheduler.Expire();
-
-        Assert.False(indicator.IsActive);
-        Assert.False(indicator.IsEnabled);
-    }
 }

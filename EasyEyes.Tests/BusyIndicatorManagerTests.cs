@@ -5,21 +5,16 @@ namespace EasyEyes.Tests;
 public class BusyIndicatorManagerTests
 {
     private static readonly TimeSpan GracePeriod = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan ActivationWindow = TimeSpan.FromSeconds(30);
 
     private readonly FakeStateSource _source = new();
     private readonly FakeTimerScheduler _graceScheduler = new();
-    private readonly FakeTimerScheduler _activationScheduler = new();
 
     private BusyIndicatorManager CreateManager()
     {
-        var indicator = new ActivationWindowIndicator(
-            new BusyIndicator(
-                _source,
-                graceScheduler: _graceScheduler,
-                gracePeriod: GracePeriod),
-            _activationScheduler,
-            ActivationWindow);
+        var indicator = new BusyIndicator(
+            _source,
+            graceScheduler: _graceScheduler,
+            gracePeriod: GracePeriod);
 
         return new BusyIndicatorManager(indicator);
     }
@@ -45,7 +40,7 @@ public class BusyIndicatorManagerTests
         _source.IsActive = true;
         var manager = CreateManager();
 
-        manager.EnableMeeting();
+        manager.SetMeetingMode(MeetingMode.On);
 
         Assert.True(manager.IsBusy);
         Assert.True(manager.IsEnabled);
@@ -56,7 +51,7 @@ public class BusyIndicatorManagerTests
     {
         var manager = CreateManager();
 
-        manager.EnableMeeting();
+        manager.SetMeetingMode(MeetingMode.On);
 
         Assert.True(manager.IsEnabled);
         Assert.False(manager.IsBusy);
@@ -69,7 +64,7 @@ public class BusyIndicatorManagerTests
     {
         _source.IsActive = true;
         var manager = CreateManager();
-        manager.EnableMeeting();
+        manager.SetMeetingMode(MeetingMode.On);
         var cleared = false;
         manager.BusyCleared += (_, _) => cleared = true;
 
@@ -80,6 +75,22 @@ public class BusyIndicatorManagerTests
         Assert.False(manager.IsBusy);
     }
 
+    // --- BecameActive event ---
+
+    [Fact]
+    public void Given_Enabled_When_DeviceActivates_Then_BecameActiveFires()
+    {
+        var manager = CreateManager();
+        manager.SetMeetingMode(MeetingMode.On);
+        var becameActive = false;
+        manager.BecameActive += (_, _) => becameActive = true;
+
+        SimulateDeviceActivated();
+
+        Assert.True(becameActive);
+        Assert.True(manager.IsBusy);
+    }
+
     // --- Disable ---
 
     [Fact]
@@ -87,7 +98,7 @@ public class BusyIndicatorManagerTests
     {
         _source.IsActive = true;
         var manager = CreateManager();
-        manager.EnableMeeting();
+        manager.SetMeetingMode(MeetingMode.On);
         var cleared = false;
         manager.BusyCleared += (_, _) => cleared = true;
 
@@ -102,7 +113,7 @@ public class BusyIndicatorManagerTests
     public void Given_NotBusy_When_Disabled_Then_NoBusyCleared()
     {
         var manager = CreateManager();
-        manager.EnableMeeting();
+        manager.SetMeetingMode(MeetingMode.On);
         var cleared = false;
         manager.BusyCleared += (_, _) => cleared = true;
 
@@ -118,7 +129,7 @@ public class BusyIndicatorManagerTests
     {
         _source.IsActive = true;
         var manager = CreateManager();
-        manager.EnableMeeting();
+        manager.SetMeetingMode(MeetingMode.On);
 
         SimulateDeviceDeactivated();
         Assert.True(manager.IsBusy);
@@ -134,7 +145,7 @@ public class BusyIndicatorManagerTests
     public void Given_EnabledWithNothingActive_When_DeviceActivates_Then_IsBusy()
     {
         var manager = CreateManager();
-        manager.EnableMeeting();
+        manager.SetMeetingMode(MeetingMode.On);
         Assert.False(manager.IsBusy);
 
         SimulateDeviceActivated();
@@ -142,33 +153,21 @@ public class BusyIndicatorManagerTests
         Assert.True(manager.IsBusy);
     }
 
-    // --- Activation window ---
+    // --- Stays enabled after grace expiry ---
 
     [Fact]
-    public void Given_EnabledWithNothingActive_When_ActivationWindowExpires_Then_ActivationExpiredFires()
+    public void Given_GraceExpired_When_DeviceReactivates_Then_IsBusy()
     {
+        _source.IsActive = true;
         var manager = CreateManager();
-        var expired = false;
-        manager.ActivationExpired += (_, _) => expired = true;
-        manager.EnableMeeting();
+        manager.SetMeetingMode(MeetingMode.On);
 
-        _activationScheduler.Expire();
-
-        Assert.True(expired);
-        Assert.False(manager.IsEnabled);
-    }
-
-    [Fact]
-    public void Given_EnabledWithNothingActive_When_DeviceActivatesBeforeWindow_Then_NoActivationExpired()
-    {
-        var manager = CreateManager();
-        var expired = false;
-        manager.ActivationExpired += (_, _) => expired = true;
-        manager.EnableMeeting();
+        SimulateDeviceDeactivated();
+        _graceScheduler.Expire();
+        Assert.False(manager.IsBusy);
+        Assert.True(manager.IsEnabled);
 
         SimulateDeviceActivated();
-
-        Assert.False(expired);
         Assert.True(manager.IsBusy);
     }
 
@@ -179,7 +178,7 @@ public class BusyIndicatorManagerTests
     {
         _source.IsActive = true;
         var manager = CreateManager();
-        manager.SetMeetingMode(MeetingMode.UntilEnd);
+        manager.SetMeetingMode(MeetingMode.On);
         Assert.True(manager.IsBusy);
 
         manager.SetMeetingMode(MeetingMode.Off);
@@ -190,90 +189,20 @@ public class BusyIndicatorManagerTests
     }
 
     [Fact]
-    public void SetMeetingMode_UntilEnd_AutoDisablesOnGraceExpiry()
-    {
-        _source.IsActive = true;
-        var manager = CreateManager();
-        manager.SetMeetingMode(MeetingMode.UntilEnd);
-        Assert.Equal(MeetingMode.UntilEnd, manager.CurrentMeetingMode);
-
-        SimulateDeviceDeactivated();
-        _graceScheduler.Expire();
-
-        Assert.False(manager.IsBusy);
-        Assert.False(manager.IsEnabled);
-    }
-
-    [Fact]
-    public void SetMeetingMode_Always_StaysEnabledAfterGraceExpiry()
-    {
-        _source.IsActive = true;
-        var manager = CreateManager();
-        manager.SetMeetingMode(MeetingMode.Always);
-        Assert.Equal(MeetingMode.Always, manager.CurrentMeetingMode);
-
-        SimulateDeviceDeactivated();
-        _graceScheduler.Expire();
-
-        Assert.False(manager.IsBusy);
-        Assert.True(manager.IsEnabled);
-    }
-
-    [Fact]
-    public void SetMeetingMode_Always_ReactivatesWhenDeviceComesBack()
-    {
-        _source.IsActive = true;
-        var manager = CreateManager();
-        manager.SetMeetingMode(MeetingMode.Always);
-
-        SimulateDeviceDeactivated();
-        _graceScheduler.Expire();
-        Assert.False(manager.IsBusy);
-
-        SimulateDeviceActivated();
-        Assert.True(manager.IsBusy);
-    }
-
-    [Fact]
-    public void SetMeetingMode_Always_NoActivationWindow()
-    {
-        var manager = CreateManager();
-        manager.SetMeetingMode(MeetingMode.Always);
-
-        Assert.False(_activationScheduler.IsRunning);
-    }
-
-    [Fact]
-    public void SetMeetingMode_Always_BusyClearedFiresButStaysEnabled()
-    {
-        _source.IsActive = true;
-        var manager = CreateManager();
-        manager.SetMeetingMode(MeetingMode.Always);
-        var clearedCount = 0;
-        manager.BusyCleared += (_, _) => clearedCount++;
-
-        SimulateDeviceDeactivated();
-        _graceScheduler.Expire();
-
-        Assert.True(clearedCount > 0);
-        Assert.True(manager.IsEnabled);
-    }
-
-    [Fact]
-    public void SetMeetingMode_Cycling_Off_UntilEnd_Always_Off()
+    public void SetMeetingMode_On_Then_Off_Then_On()
     {
         var manager = CreateManager();
 
-        manager.SetMeetingMode(MeetingMode.UntilEnd);
-        Assert.Equal(MeetingMode.UntilEnd, manager.CurrentMeetingMode);
-        Assert.True(manager.IsEnabled);
-
-        manager.SetMeetingMode(MeetingMode.Always);
-        Assert.Equal(MeetingMode.Always, manager.CurrentMeetingMode);
+        manager.SetMeetingMode(MeetingMode.On);
+        Assert.Equal(MeetingMode.On, manager.CurrentMeetingMode);
         Assert.True(manager.IsEnabled);
 
         manager.SetMeetingMode(MeetingMode.Off);
         Assert.Equal(MeetingMode.Off, manager.CurrentMeetingMode);
         Assert.False(manager.IsEnabled);
+
+        manager.SetMeetingMode(MeetingMode.On);
+        Assert.Equal(MeetingMode.On, manager.CurrentMeetingMode);
+        Assert.True(manager.IsEnabled);
     }
 }
