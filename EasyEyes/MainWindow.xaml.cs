@@ -12,12 +12,13 @@ public partial class MainWindow : Window
     private readonly EasyEyesStateMachine _stateMachine;
     private readonly EasyEyesActions _actions;
     private readonly OverlayManager _overlayManager = new();
-    private readonly MediaDeviceMonitor _mediaDeviceMonitor = new(TimeSpan.FromSeconds(1));
+    private readonly MediaDeviceMonitor _mediaDeviceMonitor;
     private readonly BusyIndicatorManager _busyIndicatorManager;
     private readonly TrayIconManager _trayIconManager;
 
     public MainWindow()
     {
+        _mediaDeviceMonitor = new MediaDeviceMonitor(TimeSpan.FromSeconds(1), Dispatcher);
         var triggerRelay = new TriggerRelay();
         _actions = new EasyEyesActions(
             TimeProvider.System,
