@@ -7,10 +7,12 @@ namespace EasyEyes;
 
 public partial class App : Application
 {
-    private static readonly string LogPath = Path.Combine(
+    private static readonly string LogDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "EasyEyes",
-        "EasyEyes.log");
+        "EasyEyes");
+
+    private static readonly string LogPath = Path.Combine(LogDir, "EasyEyes.log");
+    private static readonly string OldLogPath = Path.Combine(LogDir, "EasyEyes.old.log");
 
     private const long MaxLogFileSize = 1024 * 1024; // 1 MB
 
@@ -33,11 +35,11 @@ public partial class App : Application
             return;
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+        Directory.CreateDirectory(LogDir);
 
         try
         {
-            TruncateLogIfOversized();
+            RotateLogIfOversized();
             s_logWriter = new StreamWriter(LogPath, append: true) { AutoFlush = true };
         }
         catch
@@ -81,12 +83,12 @@ public partial class App : Application
         }
     }
 
-    private static void TruncateLogIfOversized()
+    private static void RotateLogIfOversized()
     {
         var info = new FileInfo(LogPath);
         if (info.Exists && info.Length > MaxLogFileSize)
         {
-            File.Delete(LogPath);
+            File.Move(LogPath, OldLogPath, overwrite: true);
         }
     }
 }

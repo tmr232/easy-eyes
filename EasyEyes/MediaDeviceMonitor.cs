@@ -1,3 +1,5 @@
+using System.Windows.Threading;
+
 namespace EasyEyes;
 
 /// <summary>
@@ -18,14 +20,17 @@ namespace EasyEyes;
 /// reads per second is negligible.
 /// </para>
 /// <para>
-/// Events fire on a ThreadPool thread; callers must dispatch to the UI
-/// thread if needed.
+/// The <see cref="System.Threading.Timer"/> fires on a ThreadPool thread,
+/// but events are marshalled to the provided <see cref="Dispatcher"/> so
+/// that subscribers (BusyIndicator, state machine, UI controls) always
+/// run on the UI thread.
 /// </para>
 /// </remarks>
 public sealed class MediaDeviceMonitor : IStateSource, IDisposable
 {
     private readonly DeviceUsageDetector _camera = new("webcam");
     private readonly DeviceUsageDetector _microphone = new("microphone");
+    private readonly Dispatcher _dispatcher;
     private readonly Timer _pollTimer;
     private bool _lastInUse;
     private bool _disposed;
@@ -48,8 +53,9 @@ public sealed class MediaDeviceMonitor : IStateSource, IDisposable
     /// </summary>
     public event EventHandler? Deactivated;
 
-    public MediaDeviceMonitor(TimeSpan pollInterval)
+    public MediaDeviceMonitor(TimeSpan pollInterval, Dispatcher dispatcher)
     {
+        _dispatcher = dispatcher;
         _lastInUse = IsInUse;
         _pollTimer = new Timer(Poll, null, pollInterval, pollInterval);
     }
@@ -60,10 +66,13 @@ public sealed class MediaDeviceMonitor : IStateSource, IDisposable
         if (inUse != _lastInUse)
         {
             _lastInUse = inUse;
-            if (inUse)
-                Activated?.Invoke(this, EventArgs.Empty);
-            else
-                Deactivated?.Invoke(this, EventArgs.Empty);
+            _ = _dispatcher.BeginInvoke(() =>
+            {
+                if (inUse)
+                    Activated?.Invoke(this, EventArgs.Empty);
+                else
+                    Deactivated?.Invoke(this, EventArgs.Empty);
+            });
         }
     }
 
