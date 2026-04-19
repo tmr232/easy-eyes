@@ -1,97 +1,37 @@
 namespace EasyEyes;
 
-/// <summary>
-/// Controls how the "In a meeting" indicator behaves.
-/// </summary>
 public enum MeetingMode
 {
-    /// <summary>Indicator disabled.</summary>
     Off,
-
-    /// <summary>
-    /// Indicator enabled. Auto-disables when the meeting ends
-    /// (mic/camera grace period expires).
-    /// </summary>
-    UntilEnd,
-
-    /// <summary>
-    /// Indicator enabled and persistent. When the meeting ends the
-    /// indicator stays enabled and will re-activate when mic/camera
-    /// becomes active again. Must be toggled off manually.
-    /// </summary>
-    Always,
+    On,
 }
 
-/// <summary>
-/// Tracks an "In a meeting" busy indicator backed by a
-/// <see cref="MediaDeviceMonitor"/>. When the indicator is active,
-/// <see cref="IsBusy"/> is true. When it clears, <see cref="BusyCleared"/>
-/// fires.
-/// </summary>
 public class BusyIndicatorManager : IDisposable
 {
-    private readonly ActivationWindowIndicator _indicator;
+    private readonly BusyIndicator _indicator;
 
-    /// <summary>
-    /// True if the indicator is currently active.
-    /// </summary>
     public bool IsBusy => _indicator.IsActive;
-
-    /// <summary>
-    /// Whether the indicator is currently enabled.
-    /// </summary>
     public bool IsEnabled => _indicator.IsEnabled;
-
-    /// <summary>
-    /// The current meeting indicator mode.
-    /// </summary>
     public MeetingMode CurrentMeetingMode { get; private set; }
 
-    /// <summary>
-    /// Fires when <see cref="IsBusy"/> transitions from true to false.
-    /// </summary>
     public event EventHandler? BusyCleared;
+    public event EventHandler? BecameActive;
 
-    /// <summary>
-    /// Fires when the activation window expires without any device
-    /// becoming active. The indicator has been auto-disabled.
-    /// </summary>
-    public event EventHandler? ActivationExpired;
-
-    /// <summary>
-    /// Creates a manager wired to a <see cref="MediaDeviceMonitor"/> for
-    /// camera and microphone monitoring.
-    /// </summary>
     public BusyIndicatorManager(
         IStateSource source,
         ITimerScheduler graceScheduler,
-        TimeSpan gracePeriod,
-        ITimerScheduler activationScheduler,
-        TimeSpan activationWindow)
-        : this(
-            new ActivationWindowIndicator(
-                new BusyIndicator(source, graceScheduler, gracePeriod),
-                activationScheduler,
-                activationWindow))
+        TimeSpan gracePeriod)
+        : this(new BusyIndicator(source, graceScheduler, gracePeriod))
     {
     }
 
-    /// <summary>
-    /// Creates a manager with a pre-built indicator (for testing).
-    /// </summary>
-    public BusyIndicatorManager(ActivationWindowIndicator indicator)
+    public BusyIndicatorManager(BusyIndicator indicator)
     {
         _indicator = indicator;
-
         _indicator.Cleared += (_, e) => BusyCleared?.Invoke(this, e);
-        _indicator.ActivationExpired += (_, e) => ActivationExpired?.Invoke(this, e);
+        _indicator.BecameActive += (_, e) => BecameActive?.Invoke(this, e);
     }
 
-    /// <summary>
-    /// Sets the meeting indicator mode. <see cref="MeetingMode.Off"/>
-    /// disables the indicator; other values enable it with the
-    /// corresponding persistence behaviour.
-    /// </summary>
     public void SetMeetingMode(MeetingMode mode)
     {
         if (mode == MeetingMode.Off)
@@ -99,28 +39,14 @@ public class BusyIndicatorManager : IDisposable
             DisableMeeting();
             return;
         }
-
         CurrentMeetingMode = mode;
-        _indicator.Persistent = mode == MeetingMode.Always;
         _indicator.Enable();
     }
 
-    /// <summary>
-    /// Enables the indicator in <see cref="MeetingMode.UntilEnd"/> mode.
-    /// </summary>
-    public void EnableMeeting()
-    {
-        SetMeetingMode(MeetingMode.UntilEnd);
-    }
-
-    /// <summary>
-    /// Disables the indicator.
-    /// </summary>
     public void DisableMeeting()
     {
         CurrentMeetingMode = MeetingMode.Off;
         var wasBusy = IsBusy;
-        _indicator.Persistent = false;
         _indicator.Disable();
         if (wasBusy)
             BusyCleared?.Invoke(this, EventArgs.Empty);

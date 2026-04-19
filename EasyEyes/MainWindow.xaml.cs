@@ -2,7 +2,6 @@ using System;
 using System.Windows;
 using System.Windows.Interop;
 using Windows.Media.Control;
-using Forms = System.Windows.Forms;
 
 namespace EasyEyes;
 
@@ -34,9 +33,7 @@ public partial class MainWindow : Window
         _busyIndicatorManager = new BusyIndicatorManager(
             _mediaDeviceMonitor,
             graceScheduler: new DispatcherTimerScheduler(),
-            gracePeriod: TimeSpan.FromSeconds(5),
-            activationScheduler: new DispatcherTimerScheduler(),
-            activationWindow: TimeSpan.FromSeconds(30));
+            gracePeriod: TimeSpan.FromSeconds(5));
 
         _stateMachine = new EasyEyesStateMachine(_actions, () => _busyIndicatorManager.IsBusy);
 
@@ -51,20 +48,16 @@ public partial class MainWindow : Window
 
         _busyIndicatorManager.BusyCleared += (_, _) =>
         {
-            if (_busyIndicatorManager.CurrentMeetingMode == MeetingMode.Off)
-                _trayIconManager.UpdateMeetingMenuLabel();
             if (_stateMachine.CurrentState == State.Busy)
                 _stateMachine.Fire(Trigger.BusyCleared);
         };
-        _busyIndicatorManager.ActivationExpired += (_, _) =>
+        _busyIndicatorManager.BecameActive += (_, _) =>
         {
-            _trayIconManager.UpdateMeetingMenuLabel();
-            _trayIconManager.ShowBalloonTip(
-                3000,
-                "Easy Eyes",
-                "\"In a meeting\" indicator disabled — no active meeting detected.",
-                Forms.ToolTipIcon.Info);
+            if (_stateMachine.CurrentState == State.OverlayDisplayed)
+                _stateMachine.Fire(Trigger.EnterBusy);
         };
+
+        _busyIndicatorManager.SetMeetingMode(MeetingMode.On);
 
         InitializeComponent();
         Loaded += OnLoaded;

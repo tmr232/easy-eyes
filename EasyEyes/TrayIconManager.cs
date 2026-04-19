@@ -78,12 +78,24 @@ public class TrayIconManager : IDisposable
 
         menu.Items.Add(new Forms.ToolStripSeparator());
 
-        _micCameraItem = new Forms.ToolStripMenuItem("In a meeting")
+        _micCameraItem = new Forms.ToolStripMenuItem("Detect meetings")
         {
-            CheckOnClick = false,
-            Checked = false
+            CheckOnClick = true,
+            Checked = true
         };
-        _micCameraItem.Click += (_, _) => CycleMeetingMode();
+        _micCameraItem.CheckedChanged += (_, _) =>
+        {
+            if (_micCameraItem.Checked)
+            {
+                _busyIndicatorManager.SetMeetingMode(MeetingMode.On);
+                if (_stateMachine.CurrentState == State.OverlayDisplayed && _busyIndicatorManager.IsBusy)
+                    _stateMachine.Fire(Trigger.EnterBusy);
+            }
+            else
+            {
+                _busyIndicatorManager.SetMeetingMode(MeetingMode.Off);
+            }
+        };
         menu.Items.Add(_micCameraItem);
 
         menu.Items.Add(new Forms.ToolStripSeparator());
@@ -117,15 +129,7 @@ public class TrayIconManager : IDisposable
 
     public void UpdateMeetingMenuLabel()
     {
-        var (text, check) = _busyIndicatorManager.CurrentMeetingMode switch
-        {
-            MeetingMode.Off => ("In a meeting", false),
-            MeetingMode.UntilEnd => ("In a meeting (until end)", true),
-            MeetingMode.Always => ("In a meeting (always)", true),
-            _ => ("In a meeting", false),
-        };
-        _micCameraItem.Text = text;
-        _micCameraItem.Checked = check;
+        _micCameraItem.Checked = _busyIndicatorManager.CurrentMeetingMode != MeetingMode.Off;
     }
 
     private void UpdateTrayMenu()
@@ -154,23 +158,6 @@ public class TrayIconManager : IDisposable
         _pauseUntilUnlockItem.Visible = isActive || state == State.PausedUntilUnlock;
 
         _pauseForItem.Visible = isActive;
-    }
-
-    private void CycleMeetingMode()
-    {
-        var next = _busyIndicatorManager.CurrentMeetingMode switch
-        {
-            MeetingMode.Off => MeetingMode.UntilEnd,
-            MeetingMode.UntilEnd => MeetingMode.Always,
-            MeetingMode.Always => MeetingMode.Off,
-            _ => MeetingMode.Off,
-        };
-
-        _busyIndicatorManager.SetMeetingMode(next);
-        UpdateMeetingMenuLabel();
-
-        if (next != MeetingMode.Off && _stateMachine.CurrentState == State.OverlayDisplayed)
-            _stateMachine.Fire(Trigger.EnterBusy);
     }
 
     public void Dispose()

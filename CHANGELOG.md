@@ -7,6 +7,19 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+### Changed
+
+- Simplify meeting detection to a 2-state on/off toggle ("Detect meetings"), replacing the 3-way Off/UntilEnd/Always cycle
+- Meeting detection defaults to on; when enabled, device usage (mic/camera) immediately triggers the busy state with no activation window delay
+- When the overlay is displayed and device usage is detected, automatically enter the busy state and hide the overlay
+- Grace period preserved: brief gaps in device usage don't flicker the busy state
+
+### Removed
+
+- Remove `ActivationWindowIndicator` and its activation window timer — no longer needed without the delayed-activation behavior
+- Remove `Persistent` mode from `BusyIndicator` — the indicator now always stays enabled after grace expiry
+- Remove `MeetingMode.UntilEnd` and `MeetingMode.Always` — replaced by simple `MeetingMode.On`
+
 ## [2026.04.18]
 
 ### Changed
