@@ -127,9 +127,9 @@ public partial class MainWindow : Window
                 await session.TryPauseAsync();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // No media session available or pause not supported
+            App.Log($"PauseMediaIfEnabled failed: {ex.Message}");
         }
     }
 
