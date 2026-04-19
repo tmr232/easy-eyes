@@ -12,6 +12,8 @@ public partial class App : Application
         "EasyEyes",
         "EasyEyes.log");
 
+    private const long MaxLogFileSize = 1024 * 1024; // 1 MB
+
     private static Mutex? s_instanceMutex;
     private static StreamWriter? s_logWriter;
 
@@ -35,6 +37,7 @@ public partial class App : Application
 
         try
         {
+            TruncateLogIfOversized();
             s_logWriter = new StreamWriter(LogPath, append: true) { AutoFlush = true };
         }
         catch
@@ -75,6 +78,15 @@ public partial class App : Application
         catch
         {
             // Best-effort logging
+        }
+    }
+
+    private static void TruncateLogIfOversized()
+    {
+        var info = new FileInfo(LogPath);
+        if (info.Exists && info.Length > MaxLogFileSize)
+        {
+            File.Delete(LogPath);
         }
     }
 }
