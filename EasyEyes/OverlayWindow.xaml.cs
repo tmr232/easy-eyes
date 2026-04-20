@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -11,30 +10,7 @@ namespace EasyEyes;
 
 public partial class OverlayWindow : Window
 {
-    private const int GWL_EXSTYLE = -20;
-    private const int WS_EX_TRANSPARENT = 0x00000020;
-    private const int WS_EX_LAYERED = 0x00080000;
-    private const int WS_EX_TOOLWINDOW = 0x00000080;
-    private const int WS_EX_NOACTIVATE = 0x08000000;
-
     private const double SpotlightRadius = 200;
-
-    [DllImport("user32.dll")]
-    private static extern int GetWindowLong(IntPtr hwnd, int index);
-
-    [DllImport("user32.dll")]
-    private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCursorPos(out POINT lpPoint);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-    }
 
     private readonly RadialGradientBrush _spotlightMask;
 
@@ -92,7 +68,7 @@ public partial class OverlayWindow : Window
 
     private void OnRendering(object? sender, EventArgs e)
     {
-        if (!GetCursorPos(out var pt)) return;
+        if (!NativeMethods.GetCursorPos(out var pt)) return;
 
         var wpfPoint = PointFromScreen(new Point(pt.X, pt.Y));
         _spotlightMask.Center = wpfPoint;
@@ -102,9 +78,9 @@ public partial class OverlayWindow : Window
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
-        int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        _ = SetWindowLong(hwnd, GWL_EXSTYLE,
-            exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+        int exStyle = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
+        NativeMethods.SetWindowLongChecked(hwnd, NativeMethods.GWL_EXSTYLE,
+            exStyle | NativeMethods.WS_EX_TRANSPARENT | NativeMethods.WS_EX_LAYERED | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE);
     }
 
     protected override void OnClosed(EventArgs e)
