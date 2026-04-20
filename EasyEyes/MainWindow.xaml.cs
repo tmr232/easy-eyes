@@ -83,11 +83,20 @@ public partial class MainWindow : Window
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        int exStyle = NativeMethods.GetWindowLongChecked(hwnd, NativeMethods.GWL_EXSTYLE);
-        NativeMethods.SetWindowLongChecked(hwnd, NativeMethods.GWL_EXSTYLE, exStyle | NativeMethods.WS_EX_TOOLWINDOW);
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            int exStyle = NativeMethods.GetWindowLongChecked(hwnd, NativeMethods.GWL_EXSTYLE);
+            NativeMethods.SetWindowLongChecked(hwnd, NativeMethods.GWL_EXSTYLE, exStyle | NativeMethods.WS_EX_TOOLWINDOW);
 
-        _sessionListener = new SessionNotificationListener(this);
+            _sessionListener = new SessionNotificationListener(this);
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            App.FatalError("Failed to initialize main window", ex);
+            return;
+        }
+
         _sessionListener.SessionLocked += (_, _) =>
         {
             App.Log($"SessionLocked, State={_stateMachine.CurrentState}");
