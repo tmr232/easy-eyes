@@ -15,7 +15,6 @@ public partial class App : Application
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         _overlayManager = new OverlayManager();
-        _overlayManager.CreateWindows();
         _overlayManager.ShowAll();
 
         // Invisible helper window to capture Esc key

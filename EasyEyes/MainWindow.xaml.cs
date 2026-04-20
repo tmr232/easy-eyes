@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using Windows.Media.Control;
@@ -7,6 +8,15 @@ namespace EasyEyes;
 
 public partial class MainWindow : Window
 {
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TOOLWINDOW = 0x00000080;
+
+    [DllImport("user32.dll")]
+    private static extern int GetWindowLong(IntPtr hwnd, int index);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
+
     private SessionNotificationListener? _sessionListener;
     private readonly EasyEyesStateMachine _stateMachine;
     private readonly EasyEyesActions _actions;
@@ -66,7 +76,6 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        _overlayManager.CreateWindows();
         _actions.StartActivityTimer();
     }
 
@@ -84,6 +93,10 @@ public partial class MainWindow : Window
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+        _ = SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
+
         _sessionListener = new SessionNotificationListener(this);
         _sessionListener.SessionLocked += (_, _) =>
         {

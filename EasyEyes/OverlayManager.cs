@@ -13,28 +13,24 @@ public class OverlayManager : IDisposable
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
 
-    public void CreateWindows()
+    public void ShowAll()
     {
+        _overlayVisible = true;
         foreach (var screen in Forms.Screen.AllScreens)
         {
             var window = new OverlayWindow(screen);
             window.Show();
+            window.ShowOverlay();
             _windows.Add(window);
         }
-    }
-
-    public void ShowAll()
-    {
-        _overlayVisible = true;
-        foreach (var window in _windows)
-            window.ShowOverlay();
     }
 
     public void HideAll()
     {
         _overlayVisible = false;
         foreach (var window in _windows)
-            window.HideOverlay();
+            window.Close();
+        _windows.Clear();
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
@@ -49,14 +45,8 @@ public class OverlayManager : IDisposable
             window.Close();
         _windows.Clear();
 
-        foreach (var screen in Forms.Screen.AllScreens)
-        {
-            var window = new OverlayWindow(screen);
-            window.Show();
-            if (_overlayVisible)
-                window.ShowOverlay();
-            _windows.Add(window);
-        }
+        if (_overlayVisible)
+            ShowAll();
     }
 
     public void Dispose()
