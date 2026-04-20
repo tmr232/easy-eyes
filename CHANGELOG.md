@@ -7,6 +7,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+### Fixed
+
+- Hide EasyEyes windows from the Alt-Tab switcher: overlay windows are now created on show and destroyed on hide instead of persisting invisibly, and the main window applies `WS_EX_TOOLWINDOW`
+
 ### Changed
 
 - Simplify meeting detection to a 2-state on/off toggle ("Detect meetings"), replacing the 3-way Off/UntilEnd/Always cycle
