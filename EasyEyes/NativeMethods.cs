@@ -56,6 +56,26 @@ internal static class NativeMethods
     }
 
     /// <summary>
+    /// Calls <see cref="GetWindowLong"/> with the documented error-check pattern:
+    /// clears last error, calls the function, then checks for failure (return value
+    /// of zero with a nonzero last error).
+    /// </summary>
+    /// <exception cref="Win32Exception">Thrown when GetWindowLong fails.</exception>
+    internal static int GetWindowLongChecked(IntPtr hwnd, int index)
+    {
+        Marshal.SetLastPInvokeError(0);
+        int result = GetWindowLong(hwnd, index);
+        if (result == 0)
+        {
+            int error = Marshal.GetLastPInvokeError();
+            if (error != 0)
+                throw new Win32Exception(error);
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Calls <see cref="SetWindowLong"/> with the documented error-check pattern:
     /// clears last error, calls the function, then checks for failure (return value
     /// of zero with a nonzero last error).
