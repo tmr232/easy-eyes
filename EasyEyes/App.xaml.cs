@@ -83,6 +83,17 @@ public partial class App : Application
         }
     }
 
+    public static void FatalError(string message, Exception ex)
+    {
+        Log($"FATAL: {message}: {ex}");
+        MessageBox.Show(
+            $"Easy Eyes encountered a fatal error and must close.\n\n{message}\n\n{ex.Message}",
+            "Easy Eyes",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+        Current.Shutdown(1);
+    }
+
     private static void RotateLogIfOversized()
     {
         var info = new FileInfo(LogPath);

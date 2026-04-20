@@ -77,10 +77,17 @@ public partial class OverlayWindow : Window
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        int exStyle = NativeMethods.GetWindowLongChecked(hwnd, NativeMethods.GWL_EXSTYLE);
-        NativeMethods.SetWindowLongChecked(hwnd, NativeMethods.GWL_EXSTYLE,
-            exStyle | NativeMethods.WS_EX_TRANSPARENT | NativeMethods.WS_EX_LAYERED | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE);
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            int exStyle = NativeMethods.GetWindowLongChecked(hwnd, NativeMethods.GWL_EXSTYLE);
+            NativeMethods.SetWindowLongChecked(hwnd, NativeMethods.GWL_EXSTYLE,
+                exStyle | NativeMethods.WS_EX_TRANSPARENT | NativeMethods.WS_EX_LAYERED | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE);
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            App.FatalError("Failed to initialize overlay window", ex);
+        }
     }
 
     protected override void OnClosed(EventArgs e)
