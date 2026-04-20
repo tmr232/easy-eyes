@@ -1,3 +1,5 @@
+using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -16,26 +18,6 @@ public sealed class SessionNotificationListener : IDisposable
 
     private static readonly Guid GUID_CONSOLE_DISPLAY_STATE = new("6fe69556-704a-47a0-8f24-c28d936fda47");
 
-    [DllImport("wtsapi32.dll")]
-    private static extern bool WTSRegisterSessionNotification(IntPtr hWnd, int dwFlags);
-
-    [DllImport("wtsapi32.dll")]
-    private static extern bool WTSUnRegisterSessionNotification(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr RegisterPowerSettingNotification(IntPtr hRecipient, ref Guid PowerSettingGuid, int Flags);
-
-    [DllImport("user32.dll")]
-    private static extern bool UnregisterPowerSettingNotification(IntPtr handle);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POWERBROADCAST_SETTING
-    {
-        public Guid PowerSetting;
-        public uint DataLength;
-        public byte Data;
-    }
-
     private readonly IntPtr _hwnd;
     private readonly IntPtr _powerNotification;
 
@@ -49,10 +31,14 @@ public sealed class SessionNotificationListener : IDisposable
         _hwnd = new WindowInteropHelper(window).Handle;
         var source = HwndSource.FromHwnd(_hwnd);
         source?.AddHook(WndProc);
-        WTSRegisterSessionNotification(_hwnd, NOTIFY_FOR_THIS_SESSION);
+
+        if (!NativeMethods.WTSRegisterSessionNotification(_hwnd, NOTIFY_FOR_THIS_SESSION))
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
 
         var guid = GUID_CONSOLE_DISPLAY_STATE;
-        _powerNotification = RegisterPowerSettingNotification(_hwnd, ref guid, 0);
+        _powerNotification = NativeMethods.RegisterPowerSettingNotification(_hwnd, ref guid, 0);
+        if (_powerNotification == IntPtr.Zero)
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -72,7 +58,7 @@ public sealed class SessionNotificationListener : IDisposable
         }
         else if (msg == WM_POWERBROADCAST && wParam.ToInt32() == PBT_POWERSETTINGCHANGE)
         {
-            var setting = Marshal.PtrToStructure<POWERBROADCAST_SETTING>(lParam);
+            var setting = Marshal.PtrToStructure<NativeMethods.POWERBROADCAST_SETTING>(lParam);
             if (setting.PowerSetting == GUID_CONSOLE_DISPLAY_STATE)
             {
                 if (setting.Data == 0)
@@ -87,8 +73,13 @@ public sealed class SessionNotificationListener : IDisposable
 
     public void Dispose()
     {
-        WTSUnRegisterSessionNotification(_hwnd);
+        if (!NativeMethods.WTSUnRegisterSessionNotification(_hwnd))
+            App.Log($"WTSUnRegisterSessionNotification failed: error {Marshal.GetLastPInvokeError()}");
+
         if (_powerNotification != IntPtr.Zero)
-            UnregisterPowerSettingNotification(_powerNotification);
+        {
+            if (!NativeMethods.UnregisterPowerSettingNotification(_powerNotification))
+                App.Log($"UnregisterPowerSettingNotification failed: error {Marshal.GetLastPInvokeError()}");
+        }
     }
 }
