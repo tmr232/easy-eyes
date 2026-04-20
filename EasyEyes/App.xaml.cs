@@ -87,7 +87,7 @@ public partial class App : Application
     {
         Log($"FATAL: {message}: {ex}");
         MessageBox.Show(
-            $"Easy Eyes encountered a fatal error and must close.\n\n{message}\n\n{ex.Message}",
+            $"Easy Eyes encountered a fatal error and must close.\n\n{message}\n\n{ex.Message}\n\nSee the log for details:\n{LogPath}",
             "Easy Eyes",
             MessageBoxButton.OK,
             MessageBoxImage.Error);
