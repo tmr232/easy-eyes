@@ -18,6 +18,8 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 - Fix `TrayIconManager` leaking icon stream, `Icon`, and `ContextMenuStrip` on dispose
 - Fix `TrayIconManager` double-disposing `NotifyIcon` when exiting via the tray menu
 - Fix data race on `MediaDeviceMonitor._lastInUse` accessed from ThreadPool timer callbacks without synchronization
+- Fix `CountdownTimer.Extend()` having no effect while the timer is running; it now reschedules the callback with the extended duration
+- Route unhandled dispatcher exceptions through `FatalError` (log + dialog + shutdown) instead of silently swallowing them
 
 ### Changed
 
@@ -25,11 +27,16 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 - Meeting detection defaults to on; when enabled, device usage (mic/camera) immediately triggers the busy state with no activation window delay
 - When the overlay is displayed and device usage is detected, automatically enter the busy state and hide the overlay
 - Grace period preserved: brief gaps in device usage don't flicker the busy state
+- Seal `OverlayManager`, `BusyIndicatorManager`, `TrayIconManager`, and `EasyEyesActions` (not designed for inheritance; fixes `GC.SuppressFinalize` correctness)
 
 ### Removed
 
+- Remove unused `MediaPlaybackMonitor` class (dead code; recoverable from git history)
+
 - Remove `ActivationWindowIndicator` and its activation window timer — no longer needed without the delayed-activation behavior
+
 - Remove `Persistent` mode from `BusyIndicator` — the indicator now always stays enabled after grace expiry
+
 - Remove `MeetingMode.UntilEnd` and `MeetingMode.Always` — replaced by simple `MeetingMode.On`
 
 ## [2026.04.18]

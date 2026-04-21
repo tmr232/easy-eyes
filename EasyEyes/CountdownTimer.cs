@@ -112,8 +112,25 @@ public class CountdownTimer
 
     public void Extend(TimeSpan duration)
     {
-        if (duration > _remaining)
-            _remaining = duration;
+        if (_running)
+        {
+            var elapsed = _timeProvider.GetUtcNow().UtcDateTime - _startedAt;
+            var currentRemaining = _remaining - elapsed;
+            if (currentRemaining < TimeSpan.Zero)
+                currentRemaining = TimeSpan.Zero;
+
+            if (duration > currentRemaining)
+            {
+                _remaining = duration;
+                _scheduler.Cancel();
+                StartScheduler(duration);
+            }
+        }
+        else
+        {
+            if (duration > _remaining)
+                _remaining = duration;
+        }
     }
 
     public void Stop()
