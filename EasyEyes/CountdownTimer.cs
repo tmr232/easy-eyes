@@ -97,6 +97,9 @@ public class CountdownTimer
 
     public void Resume()
     {
+        if (_running)
+            return;
+
         StartScheduler(_remaining);
     }
 

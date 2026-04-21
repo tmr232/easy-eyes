@@ -295,6 +295,22 @@ public class CountdownTimerTests
     }
 
     [Fact]
+    public void Resume_WhenAlreadyRunning_IsNoOp()
+    {
+        var timer = CreateTimer();
+        timer.Start();
+        _time.Advance(TimeSpan.FromMinutes(5));
+
+        // Resume while already running should be a no-op — should not
+        // reset the start time or restart the scheduler.
+        timer.Resume();
+
+        // GetRemaining should still reflect the 5 minutes that elapsed,
+        // not the full duration restarted from now.
+        Assert.Equal(TimeSpan.FromMinutes(15), timer.GetRemaining());
+    }
+
+    [Fact]
     public void Expire_CallbackCanRestartTimer()
     {
         // The expiry callback may re-enter the timer (e.g., state machine

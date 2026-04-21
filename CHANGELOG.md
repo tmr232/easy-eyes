@@ -10,6 +10,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 ### Fixed
 
 - Hide EasyEyes windows from the Alt-Tab switcher: overlay windows are now created on show and destroyed on hide instead of persisting invisibly, and the main window applies `WS_EX_TOOLWINDOW`
+- Fix `CountdownTimer.Resume()` restarting the timer from scratch when called while already running instead of being a no-op
+- Fix `BusyIndicatorManager.DisableMeeting()` potentially double-firing `BusyCleared` by moving the `Cleared` event into `BusyIndicator.Disable()` for active→inactive transitions
+- Fix `SessionNotificationListener` leaking a WTS session registration when `RegisterPowerSettingNotification` fails in the constructor
+- Fix `OverlayManager.ShowAll()` leaking old overlay windows when called while windows are already visible
 
 ### Changed
 
