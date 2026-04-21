@@ -38,7 +38,10 @@ public sealed class SessionNotificationListener : IDisposable
         var guid = GUID_CONSOLE_DISPLAY_STATE;
         _powerNotification = NativeMethods.RegisterPowerSettingNotification(_hwnd, ref guid, 0);
         if (_powerNotification == IntPtr.Zero)
+        {
+            NativeMethods.WTSUnRegisterSessionNotification(_hwnd);
             throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

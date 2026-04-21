@@ -110,6 +110,40 @@ public class BusyIndicatorManagerTests
     }
 
     [Fact]
+    public void Given_Busy_When_Disabled_Then_BusyCleared_FiresExactlyOnce()
+    {
+        _source.IsActive = true;
+        var manager = CreateManager();
+        manager.SetMeetingMode(MeetingMode.On);
+        var clearedCount = 0;
+        manager.BusyCleared += (_, _) => clearedCount++;
+
+        manager.DisableMeeting();
+
+        Assert.Equal(1, clearedCount);
+    }
+
+    [Fact]
+    public void Given_BusyDuringGrace_When_Disabled_Then_BusyCleared_FiresExactlyOnce()
+    {
+        // Device was active, then deactivated (grace timer running).
+        // DisableMeeting should fire BusyCleared exactly once, not double-fire
+        // from both BusyIndicator.Cleared forwarding and the manual invoke.
+        _source.IsActive = true;
+        var manager = CreateManager();
+        manager.SetMeetingMode(MeetingMode.On);
+        SimulateDeviceDeactivated(); // grace timer starts, still IsBusy
+        Assert.True(manager.IsBusy);
+
+        var clearedCount = 0;
+        manager.BusyCleared += (_, _) => clearedCount++;
+
+        manager.DisableMeeting();
+
+        Assert.Equal(1, clearedCount);
+    }
+
+    [Fact]
     public void Given_NotBusy_When_Disabled_Then_NoBusyCleared()
     {
         var manager = CreateManager();

@@ -89,7 +89,10 @@ public class BusyIndicator
         _enabled = false;
         _graceScheduler.Cancel();
         Unsubscribe();
+        var wasActive = IsActive;
         IsActive = false;
+        if (wasActive)
+            Cleared?.Invoke(this, EventArgs.Empty);
     }
 
     private void Subscribe()

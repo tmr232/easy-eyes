@@ -15,6 +15,9 @@ public class OverlayManager : IDisposable
 
     public void ShowAll()
     {
+        if (_windows.Count > 0)
+            HideAll();
+
         _overlayVisible = true;
         foreach (var screen in Forms.Screen.AllScreens)
         {

@@ -46,10 +46,7 @@ public class BusyIndicatorManager : IDisposable
     public void DisableMeeting()
     {
         CurrentMeetingMode = MeetingMode.Off;
-        var wasBusy = IsBusy;
         _indicator.Disable();
-        if (wasBusy)
-            BusyCleared?.Invoke(this, EventArgs.Empty);
     }
 
     public void Dispose()
