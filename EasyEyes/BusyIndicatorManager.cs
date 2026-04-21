@@ -6,7 +6,7 @@ public enum MeetingMode
     On,
 }
 
-public class BusyIndicatorManager : IDisposable
+public sealed class BusyIndicatorManager : IDisposable
 {
     private readonly BusyIndicator _indicator;
 

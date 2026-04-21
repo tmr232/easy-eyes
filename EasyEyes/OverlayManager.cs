@@ -3,7 +3,7 @@ using Forms = System.Windows.Forms;
 
 namespace EasyEyes;
 
-public class OverlayManager : IDisposable
+public sealed class OverlayManager : IDisposable
 {
     private readonly List<OverlayWindow> _windows = [];
     private bool _overlayVisible;

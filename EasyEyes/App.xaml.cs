@@ -49,7 +49,7 @@ public partial class App : Application
 
         DispatcherUnhandledException += (_, args) =>
         {
-            Log($"DispatcherUnhandledException: {args.Exception}");
+            FatalError("Unexpected error", args.Exception);
             args.Handled = true;
         };
 

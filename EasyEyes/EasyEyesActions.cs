@@ -1,6 +1,6 @@
 namespace EasyEyes;
 
-public class EasyEyesActions : IEasyEyesActions
+public sealed class EasyEyesActions : IEasyEyesActions
 {
     private readonly CountdownTimer _activityTimer;
     private readonly CountdownTimer _restTimer;

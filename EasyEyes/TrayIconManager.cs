@@ -9,7 +9,7 @@ namespace EasyEyes;
 /// <summary>
 /// Owns the system tray icon, its context menu, and all menu interaction logic.
 /// </summary>
-public class TrayIconManager : IDisposable
+public sealed class TrayIconManager : IDisposable
 {
     private readonly Forms.NotifyIcon _trayIcon;
     private readonly Stream _iconStream;

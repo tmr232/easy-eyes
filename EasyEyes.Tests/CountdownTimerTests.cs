@@ -245,6 +245,33 @@ public class CountdownTimerTests
         Assert.Equal(TimeSpan.FromMinutes(15), timer.GetRemaining());
     }
 
+    [Fact]
+    public void Extend_WhileRunning_ExtendsRemainingTime()
+    {
+        var timer = CreateTimer();
+        timer.Start();
+        _time.Advance(TimeSpan.FromMinutes(15)); // 5 min remaining
+
+        // Extend to 30 min while running — should reschedule the timer
+        timer.Extend(TimeSpan.FromMinutes(30));
+
+        Assert.Equal(TimeSpan.FromMinutes(30), timer.GetRemaining());
+    }
+
+    [Fact]
+    public void Extend_WhileRunning_ReschedulesCallback()
+    {
+        var timer = CreateTimer();
+        timer.Start();
+        _time.Advance(TimeSpan.FromMinutes(15)); // 5 min remaining
+
+        timer.Extend(TimeSpan.FromMinutes(30));
+
+        // The scheduler should have been restarted with the new remaining time
+        Assert.True(_scheduler.IsRunning);
+        Assert.Equal(TimeSpan.FromMinutes(30), _scheduler.LastInterval);
+    }
+
     // --- Stop ---
 
     [Fact]
