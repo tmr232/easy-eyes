@@ -32,7 +32,7 @@ public sealed class MediaDeviceMonitor : IStateSource, IDisposable
     private readonly DeviceUsageDetector _microphone = new("microphone");
     private readonly Dispatcher _dispatcher;
     private readonly Timer _pollTimer;
-    private bool _lastInUse;
+    private volatile bool _lastInUse;
     private bool _disposed;
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.IO;
 using System.Windows;
 using Forms = System.Windows.Forms;
 
@@ -11,6 +12,8 @@ namespace EasyEyes;
 public class TrayIconManager : IDisposable
 {
     private readonly Forms.NotifyIcon _trayIcon;
+    private readonly Stream _iconStream;
+    private readonly Icon _icon;
     private readonly Forms.ToolStripLabel _activityTimeRemainingLabel;
     private readonly Forms.ToolStripMenuItem _pauseUntilUnlockItem;
     private readonly Forms.ToolStripMenuItem _pauseForItem;
@@ -20,6 +23,7 @@ public class TrayIconManager : IDisposable
     private readonly IEasyEyesActions _actions;
     private readonly BusyIndicatorManager _busyIndicatorManager;
     private bool _pauseMediaOnLock = true;
+    private bool _disposed;
 
     public bool PauseMediaOnLock => _pauseMediaOnLock;
 
@@ -32,11 +36,12 @@ public class TrayIconManager : IDisposable
         _actions = actions;
         _busyIndicatorManager = busyIndicatorManager;
 
-        var iconStream = System.Reflection.Assembly.GetExecutingAssembly()
+        _iconStream = System.Reflection.Assembly.GetExecutingAssembly()
             .GetManifestResourceStream("tray.ico")!;
+        _icon = new Icon(_iconStream);
         _trayIcon = new Forms.NotifyIcon
         {
-            Icon = new Icon(iconStream),
+            Icon = _icon,
             Text = "Easy Eyes",
             Visible = true
         };
@@ -112,8 +117,7 @@ public class TrayIconManager : IDisposable
         menu.Items.Add("Exit", null, (_, _) =>
         {
             menu.Close();
-            _trayIcon.Visible = false;
-            _trayIcon.Dispose();
+            Dispose();
             Application.Current.Shutdown();
         });
 
@@ -162,8 +166,15 @@ public class TrayIconManager : IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+
+        _disposed = true;
         _trayIcon.Visible = false;
+        _trayIcon.ContextMenuStrip?.Dispose();
         _trayIcon.Dispose();
+        _icon.Dispose();
+        _iconStream.Dispose();
         GC.SuppressFinalize(this);
     }
 }
