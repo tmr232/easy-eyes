@@ -14,6 +14,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 - Fix `BusyIndicatorManager.DisableMeeting()` potentially double-firing `BusyCleared` by moving the `Cleared` event into `BusyIndicator.Disable()` for active→inactive transitions
 - Fix `SessionNotificationListener` leaking a WTS session registration when `RegisterPowerSettingNotification` fails in the constructor
 - Fix `OverlayManager.ShowAll()` leaking old overlay windows when called while windows are already visible
+- Fix overlay window positioning on displays with >100% DPI scaling by converting `Screen.Bounds` physical pixels to WPF device-independent units
+- Fix `TrayIconManager` leaking icon stream, `Icon`, and `ContextMenuStrip` on dispose
+- Fix `TrayIconManager` double-disposing `NotifyIcon` when exiting via the tray menu
+- Fix data race on `MediaDeviceMonitor._lastInUse` accessed from ThreadPool timer callbacks without synchronization
 
 ### Changed
 

@@ -13,9 +13,12 @@ public partial class OverlayWindow : Window
     private const double SpotlightRadius = 200;
 
     private readonly RadialGradientBrush _spotlightMask;
+    private readonly Forms.Screen _screen;
 
     public OverlayWindow(Forms.Screen screen)
     {
+        _screen = screen;
+
         _spotlightMask = new RadialGradientBrush
         {
             MappingMode = BrushMappingMode.Absolute,
@@ -32,20 +35,23 @@ public partial class OverlayWindow : Window
         Overlay.OpacityMask = _spotlightMask;
         Overlay.Opacity = 0;
 
-        PositionOnScreen(screen);
-
         SourceInitialized += OnSourceInitialized;
     }
 
-    public void PositionOnScreen(Forms.Screen screen)
+    private void PositionOnScreen()
     {
-        var bounds = screen.Bounds;
-        Left = bounds.Left;
-        Top = bounds.Top;
-        Width = bounds.Width;
-        // Leave 1px uncovered so Windows doesn't treat this as a
+        var bounds = _screen.Bounds;
+        var source = PresentationSource.FromVisual(this);
+        var transform = source?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+        var topLeft = transform.Transform(new Point(bounds.Left, bounds.Top));
+        var size = transform.Transform(new Point(bounds.Width, bounds.Height));
+
+        Left = topLeft.X;
+        Top = topLeft.Y;
+        Width = size.X;
+        // Leave 1px (physical) uncovered so Windows doesn't treat this as a
         // fullscreen app and hide the taskbar.
-        Height = bounds.Height - 1;
+        Height = size.Y - 1;
     }
 
     public void ShowOverlay()
@@ -88,6 +94,8 @@ public partial class OverlayWindow : Window
         {
             App.FatalError("Failed to initialize overlay window", ex);
         }
+
+        PositionOnScreen();
     }
 
     protected override void OnClosed(EventArgs e)
