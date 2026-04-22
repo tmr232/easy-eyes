@@ -7,6 +7,8 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+## [2026.04.22]
+
 ### Fixed
 
 - Hide EasyEyes windows from the Alt-Tab switcher: overlay windows are now created on show and destroyed on hide instead of persisting invisibly, and the main window applies `WS_EX_TOOLWINDOW`
