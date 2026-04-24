@@ -10,6 +10,7 @@ The app lives in the system tray with pause, resume, and snooze controls.
 - **Pause until unlock** — suspends the timer until the next screen unlock
 - **Pause for duration** — extends the timer by a custom number of minutes
 - **In a meeting** — 3-way toggle (Off → Until end → Always) that defers the overlay while mic/camera is active, with a configurable grace period
+- **Do not disturb** — defers the overlay while a video player or game is in the foreground; automatically resumes when you switch away (see [Do Not Disturb](#do-not-disturb) below)
 - **Pause media on lock** — automatically pauses playing media when the screen locks or display turns off (enabled by default)
 
 ## Architecture
@@ -30,6 +31,10 @@ Core logic is a [Stateless](https://github.com/dotnet-state-machine/stateless) s
 | `BusyIndicator`               | Core indicator logic with grace-period handling backed by `IStateSource`                          |
 | `ActivationWindowIndicator`   | Wraps `BusyIndicator` with a timed activation window                                              |
 | `MediaDeviceMonitor`          | Polls mic/camera usage; implements `IStateSource`                                                 |
+| `DndManager`                  | Orchestrates the Do Not Disturb lifecycle (settle timer, foreground capture, busy indicator)      |
+| `ForegroundWindowStateSource` | Polls the foreground window process; implements `IForegroundCapture`                              |
+| `BorderFlashManager`          | Shows colored border windows on all monitors (persistent or timed flash)                          |
+| `BorderFlashWindow`           | Lightweight click-through WPF window displaying a single colored border on one monitor            |
 | `SessionNotificationListener` | Listens for session lock/unlock and display on/off events                                         |
 | `TriggerRelay`                | Decouples timer expiry callbacks from the state machine (avoids re-entrant fires)                 |
 | `MainWindow`                  | Non-visual host wiring the state machine, tray icon, session listener, and overlay manager        |
@@ -52,8 +57,29 @@ Core logic is a [Stateless](https://github.com/dotnet-state-machine/stateless) s
 - **Pause until unlock** — checkmark toggle
 - **Pause for...** — opens a dialog to enter minutes
 - **In a meeting** — 3-way click-cycle: Off → Until end (auto-disables when meeting ends) → Always (stays active until manually toggled off)
+- **Do not disturb** — checkmark toggle; label shows "(arming...)" during settle, then "(ProcessName)" when locked
 - **Pause media on lock** — checkmark toggle (enabled by default)
 - **Exit** — shuts down the application
+
+### Do Not Disturb
+
+The Do Not Disturb (DND) feature lets you defer the overlay while watching a video or playing a game. It works by tracking which app is in the foreground.
+
+**How it works:**
+
+1. Click **Do not disturb** in the tray menu.
+2. An **amber border** appears on all monitors — this is the 10-second settle period.
+3. Switch to your video player or game within 10 seconds.
+4. A **green border flash** confirms the app is captured. The overlay is now deferred.
+5. When you switch away from the captured app for longer than the grace period (45 seconds), a **red border flash** appears and normal overlay behavior resumes.
+
+**Automatic clearing:**
+
+- Locking the screen or the display turning off automatically clears DND. On unlock, a red border flash reminds you that DND is no longer active.
+- Briefly alt-tabbing (e.g. to check a message) and returning within the grace period keeps DND active.
+- Clicking the tray menu item again immediately deactivates DND.
+
+**Design rationale:** Rather than trying to auto-detect video playback or game activity (which is unreliable — controllers may not register as input, silent movie scenes have no audio, fullscreen detection has false positives), DND uses an intentional opt-in model. The user knows what they're doing, and the foreground-window check reliably detects when they stop.
 
 ## Prerequisites
 
