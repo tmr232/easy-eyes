@@ -41,8 +41,8 @@ public enum DndState
 /// </remarks>
 public sealed class DndManager : IDisposable
 {
-    private readonly ForegroundWindowStateSource _foregroundSource;
-    private readonly BorderFlashManager _borderFlashManager;
+    private readonly IForegroundCapture _foregroundSource;
+    private readonly IDndFlashFeedback _borderFlashManager;
     private readonly BusyIndicator _indicator;
     private readonly ITimerScheduler _settleScheduler;
     private readonly TimeSpan _settleDuration;
@@ -81,8 +81,8 @@ public sealed class DndManager : IDisposable
     public event EventHandler? StateChanged;
 
     public DndManager(
-        ForegroundWindowStateSource foregroundSource,
-        BorderFlashManager borderFlashManager,
+        IForegroundCapture foregroundSource,
+        IDndFlashFeedback borderFlashManager,
         ITimerScheduler settleScheduler,
         ITimerScheduler graceScheduler,
         TimeSpan settleDuration,
@@ -178,7 +178,6 @@ public sealed class DndManager : IDisposable
         _settleScheduler.Cancel();
         _indicator.Disable();
         _foregroundSource.Release();
-        _borderFlashManager.Dispose();
         GC.SuppressFinalize(this);
     }
 }

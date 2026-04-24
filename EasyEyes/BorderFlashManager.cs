@@ -10,7 +10,7 @@ namespace EasyEyes;
 /// persistent borders (for the arming state) and timed flashes (for
 /// locked/cleared feedback).
 /// </summary>
-public sealed class BorderFlashManager : IDisposable
+public sealed class BorderFlashManager : IDndFlashFeedback, IDisposable
 {
     /// <summary>Amber — shown persistently while the settle timer is running.</summary>
     public static readonly Color ArmingColor = (Color)ColorConverter.ConvertFromString("#FFA500");
