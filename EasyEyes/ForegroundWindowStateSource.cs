@@ -21,7 +21,7 @@ namespace EasyEyes;
 /// window), the match is preserved.
 /// </para>
 /// </remarks>
-public sealed class ForegroundWindowStateSource : IStateSource, IDisposable
+public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposable
 {
     private readonly Dispatcher _dispatcher;
     private readonly TimeSpan _pollInterval;

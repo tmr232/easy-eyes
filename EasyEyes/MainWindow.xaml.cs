@@ -14,6 +14,7 @@ public partial class MainWindow : Window
     private readonly MediaDeviceMonitor _mediaDeviceMonitor;
     private readonly BusyIndicatorManager _busyIndicatorManager;
     private readonly ForegroundWindowStateSource _foregroundSource;
+    private readonly BorderFlashManager _borderFlashManager;
     private readonly DndManager _dndManager;
     private readonly TrayIconManager _trayIconManager;
     private bool _wasDndActiveOnLock;
@@ -39,9 +40,10 @@ public partial class MainWindow : Window
             gracePeriod: TimeSpan.FromSeconds(5));
 
         _foregroundSource = new ForegroundWindowStateSource(TimeSpan.FromSeconds(1), Dispatcher);
+        _borderFlashManager = new BorderFlashManager();
         _dndManager = new DndManager(
             _foregroundSource,
-            new BorderFlashManager(),
+            _borderFlashManager,
             settleScheduler: new DispatcherTimerScheduler(),
             graceScheduler: new DispatcherTimerScheduler(),
             settleDuration: TimeSpan.FromSeconds(10),
@@ -197,6 +199,7 @@ public partial class MainWindow : Window
         _mediaDeviceMonitor.Dispose();
         _busyIndicatorManager.Dispose();
         _dndManager.Dispose();
+        _borderFlashManager.Dispose();
         _foregroundSource.Dispose();
         _overlayManager.Dispose();
         _trayIconManager.Dispose();
