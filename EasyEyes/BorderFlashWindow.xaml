@@ -1,0 +1,17 @@
+<Window x:Class="EasyEyes.BorderFlashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        ResizeMode="NoResize">
+    <Grid>
+        <Border x:Name="FlashBorder"
+                BorderThickness="6"
+                Background="Transparent"
+                IsHitTestVisible="False" />
+    </Grid>
+</Window>
