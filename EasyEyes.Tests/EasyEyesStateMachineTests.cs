@@ -1115,6 +1115,7 @@ public class GivenWhenThenTests
         _actions.Calls.Clear();
 
         // When: busy clears
+        _isBusy = false;
         sm.Fire(Trigger.BusyCleared);
 
         // Then: overlay is shown
@@ -1240,6 +1241,33 @@ public class GivenWhenThenTests
         // Then: overlay is re-shown
         Assert.Equal(State.OverlayDisplayed, sm.CurrentState);
         Assert.Contains(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
+    }
+
+    // --- Issue #5: defensive routing on entry to OverlayDisplayed ---
+
+    [Fact]
+    public void Given_BusyFlipsAfterGuard_When_ActivityTimerExpires_Then_DefensiveOnEntryRoutesToBusy()
+    {
+        // Reproduces the issue #5 race: at guard-evaluation time the busy
+        // source reads false (so Stateless picks OverlayDisplayed), but by
+        // the moment OnEntry runs the source has flipped true. The
+        // defensive check in OnEntry must re-route to Busy and skip
+        // ShowOverlay.
+        var calls = 0;
+        // Stateless calls every PermitIf guard each fire. The first two calls
+        // are the guards (both see false → !_isBusy() picks OverlayDisplayed).
+        // The third call is the defensive OnEntry check, which sees true.
+        var sm = new EasyEyesStateMachine(_actions, () =>
+        {
+            calls++;
+            return calls >= 3;
+        });
+
+        sm.Fire(Trigger.ActivityTimerExpired);
+
+        Assert.Equal(State.Busy, sm.CurrentState);
+        Assert.DoesNotContain(nameof(IEasyEyesActions.ShowOverlay), _actions.Calls);
+        Assert.Contains(nameof(IEasyEyesActions.HideOverlay), _actions.Calls);
     }
 
     [Fact]

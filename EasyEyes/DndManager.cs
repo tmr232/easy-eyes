@@ -49,10 +49,20 @@ public sealed class DndManager : IDisposable
     private bool _disposed;
 
     /// <summary>
-    /// Whether DND is actively deferring the overlay (the captured app
-    /// is in the foreground, or within the grace period after leaving).
+    /// Whether DND should defer the overlay. True whenever DND is not
+    /// <see cref="DndState.Off"/> — that is, during <see cref="DndState.Arming"/>
+    /// (the user has expressed intent and the amber border is up) and
+    /// during <see cref="DndState.Active"/> (the captured app is in the
+    /// foreground, or within the grace period after leaving).
     /// </summary>
-    public bool IsBusy => _indicator.IsActive;
+    /// <remarks>
+    /// Including <see cref="DndState.Arming"/> ensures that if the activity
+    /// timer expires while the user is still arming DND, the overlay is
+    /// suppressed (issue #5 in <c>issues-with-dnd.md</c>). The inner
+    /// <see cref="BusyIndicator"/> still governs when DND eventually
+    /// clears via the grace period after the user leaves the captured app.
+    /// </remarks>
+    public bool IsBusy => CurrentState != DndState.Off;
 
     /// <summary>Current DND state.</summary>
     public DndState CurrentState { get; private set; }
