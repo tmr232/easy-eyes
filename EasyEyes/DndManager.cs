@@ -68,12 +68,6 @@ public sealed class DndManager : IDisposable
     public DndState CurrentState { get; private set; }
 
     /// <summary>
-    /// Display name of the captured process, or <c>null</c> if nothing
-    /// is captured.
-    /// </summary>
-    public string? CapturedProcessName => _foregroundSource.CapturedProcessName;
-
-    /// <summary>
     /// Fires when the busy indicator clears (grace period expired after
     /// the user left the captured app).
     /// </summary>
