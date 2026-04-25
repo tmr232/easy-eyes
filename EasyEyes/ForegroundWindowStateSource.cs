@@ -77,30 +77,6 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
         }
     }
 
-    /// <summary>
-    /// The process name of the captured process, or <c>null</c> if nothing
-    /// is captured.
-    /// </summary>
-    public string? CapturedProcessName
-    {
-        get
-        {
-            if (!_capturedProcessId.HasValue)
-            {
-                return null;
-            }
-
-            try
-            {
-                return System.Diagnostics.Process.GetProcessById((int)_capturedProcessId.Value).ProcessName;
-            }
-            catch (ArgumentException)
-            {
-                return null;
-            }
-        }
-    }
-
     private void Poll(object? state)
     {
         if (!_capturedProcessId.HasValue)

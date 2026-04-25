@@ -16,10 +16,4 @@ public interface IForegroundCapture : IStateSource
     /// Clears the captured process and stops monitoring.
     /// </summary>
     void Release();
-
-    /// <summary>
-    /// Display name of the captured process, or <c>null</c> if nothing
-    /// is captured.
-    /// </summary>
-    string? CapturedProcessName { get; }
 }

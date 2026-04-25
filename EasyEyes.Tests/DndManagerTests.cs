@@ -353,15 +353,27 @@ public class DndManagerTests
         Assert.Equal(DndState.Off, manager.CurrentState);
     }
 
-    // --- CapturedProcessName ---
+    // --- Tray label formatting (issue #3) ---
 
     [Fact]
-    public void CapturedProcessName_DelegatesToForegroundCapture()
+    public void TrayLabel_WhenActive_IsPlainDoNotDisturb()
     {
-        _fakeCapture.CapturedProcessName = "vlc";
-        var manager = CreateManager();
+        // Issue #3: the captured process name should not be surfaced
+        // in the tray menu label. After Activate -> settle -> Active,
+        // the label is just "Do not disturb".
+        Assert.Equal("Do not disturb", TrayIconManager.FormatDndLabel(DndState.Active));
+    }
 
-        Assert.Equal("vlc", manager.CapturedProcessName);
+    [Fact]
+    public void TrayLabel_WhenArming_IncludesArmingSuffix()
+    {
+        Assert.Equal("Do not disturb (arming...)", TrayIconManager.FormatDndLabel(DndState.Arming));
+    }
+
+    [Fact]
+    public void TrayLabel_WhenOff_IsPlainDoNotDisturb()
+    {
+        Assert.Equal("Do not disturb", TrayIconManager.FormatDndLabel(DndState.Off));
     }
 }
 
@@ -374,7 +386,6 @@ public class FakeForegroundCapture : IForegroundCapture
     public bool IsActive { get; set; }
     public bool WasCaptured { get; set; }
     public bool WasReleased { get; set; }
-    public string? CapturedProcessName { get; set; }
 
     public event EventHandler? Activated;
     public event EventHandler? Deactivated;

@@ -159,25 +159,22 @@ public sealed class TrayIconManager : IDisposable
 
     private void UpdateDndMenuLabel()
     {
-        switch (_dndManager.CurrentState)
-        {
-            case DndState.Arming:
-                _dndItem.Text = "Do not disturb (arming...)";
-                _dndItem.Checked = true;
-                break;
-            case DndState.Active:
-                var name = _dndManager.CapturedProcessName;
-                _dndItem.Text = name != null
-                    ? $"Do not disturb ({name})"
-                    : "Do not disturb (active)";
-                _dndItem.Checked = true;
-                break;
-            default:
-                _dndItem.Text = "Do not disturb";
-                _dndItem.Checked = false;
-                break;
-        }
+        _dndItem.Text = FormatDndLabel(_dndManager.CurrentState);
+        _dndItem.Checked = _dndManager.CurrentState != DndState.Off;
     }
+
+    /// <summary>
+    /// Formats the tray menu label for the given DND state. The captured
+    /// process name is intentionally not surfaced (issue #3): the user
+    /// already knows what they armed DND for, and the only useful tray
+    /// signal is "armed" vs "active". The "(arming...)" suffix
+    /// distinguishes the settle window from the active state.
+    /// </summary>
+    public static string FormatDndLabel(DndState state) => state switch
+    {
+        DndState.Arming => "Do not disturb (arming...)",
+        _ => "Do not disturb",
+    };
 
     private void UpdateTrayMenu()
     {

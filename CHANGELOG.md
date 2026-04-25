@@ -15,6 +15,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 - Fix Do Not Disturb failing to suppress the overlay when activated while the overlay was already showing or while still arming (issue #5 in `issues-with-dnd.md`). `DndManager.IsBusy` now reports busy from the moment DND is armed, the overlay state hides immediately when DND turns on, and the state machine defensively re-checks the busy predicate on entry to `OverlayDisplayed` so source-vs-trigger races no longer surface the overlay. Cross-source `BusyCleared` no longer pops the overlay while the other busy source (meeting indicator vs. DND) is still active.
 
+### Changed
+
+- Drop the captured process name from the Do Not Disturb tray menu label (issue #3 in `issues-with-dnd.md`). The label is now a plain "Do not disturb" with checkmark when active, plus an "(arming...)" suffix during the settle window. The user knows what they armed DND for, and exposing the underlying process name (e.g. `chrome` for a YouTube tab) was misleading. `IForegroundCapture.CapturedProcessName` and the `Process.GetProcessById` lookup in `ForegroundWindowStateSource` are gone.
+
 ## [2026.04.22]
 
 ### Fixed
