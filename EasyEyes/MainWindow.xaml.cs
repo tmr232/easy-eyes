@@ -60,26 +60,19 @@ public partial class MainWindow : Window
 
         _trayIconManager = new TrayIconManager(_stateMachine, _actions, _busyIndicatorManager, _dndManager);
 
-        _busyIndicatorManager.BusyCleared += (_, _) =>
-        {
-            if (_stateMachine.CurrentState == State.Busy)
-                _stateMachine.Fire(Trigger.BusyCleared);
-        };
-        _busyIndicatorManager.BecameActive += (_, _) =>
-        {
-            if (_stateMachine.CurrentState == State.OverlayDisplayed)
-                _stateMachine.Fire(Trigger.EnterBusy);
-        };
+        _busyIndicatorManager.BusyCleared += (_, _) => OnAnyBusyCleared();
+        _busyIndicatorManager.BecameActive += (_, _) => OnAnyBusyBecameActive();
 
-        _dndManager.BusyCleared += (_, _) =>
+        _dndManager.BusyCleared += (_, _) => OnAnyBusyCleared();
+        _dndManager.BecameActive += (_, _) => OnAnyBusyBecameActive();
+        _dndManager.StateChanged += (_, _) =>
         {
-            if (_stateMachine.CurrentState == State.Busy)
-                _stateMachine.Fire(Trigger.BusyCleared);
-        };
-        _dndManager.BecameActive += (_, _) =>
-        {
-            if (_stateMachine.CurrentState == State.OverlayDisplayed)
-                _stateMachine.Fire(Trigger.EnterBusy);
+            // When DND turns on (Off → Arming), treat it like a busy source becoming
+            // active so an already-displayed overlay is hidden immediately. This
+            // closes the race in issue #5 where the overlay was shown between
+            // ActivityTimerExpired and DND being activated.
+            if (_dndManager.CurrentState != DndState.Off)
+                OnAnyBusyBecameActive();
         };
 
         _busyIndicatorManager.SetMeetingMode(MeetingMode.On);
@@ -92,6 +85,31 @@ public partial class MainWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _actions.StartActivityTimer();
+    }
+
+    /// <summary>
+    /// Called when any busy source (meeting indicator or DND) reports that it
+    /// has cleared. Only fires <see cref="Trigger.BusyCleared"/> when BOTH
+    /// sources agree that they are no longer busy; otherwise the overlay would
+    /// re-appear while the other source is still suppressing it.
+    /// </summary>
+    private void OnAnyBusyCleared()
+    {
+        if (_stateMachine.CurrentState != State.Busy)
+            return;
+        if (_busyIndicatorManager.IsBusy || _dndManager.IsBusy)
+            return;
+        _stateMachine.Fire(Trigger.BusyCleared);
+    }
+
+    /// <summary>
+    /// Called when any busy source becomes active. If the overlay is currently
+    /// displayed, transitions to <see cref="State.Busy"/> to hide it.
+    /// </summary>
+    private void OnAnyBusyBecameActive()
+    {
+        if (_stateMachine.CurrentState == State.OverlayDisplayed)
+            _stateMachine.Fire(Trigger.EnterBusy);
     }
 
     private void DoShowOverlay()

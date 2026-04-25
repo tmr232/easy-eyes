@@ -118,6 +118,29 @@ public class DndManagerTests
         Assert.True(manager.IsBusy);
     }
 
+    [Fact]
+    public void Activate_IsBusyDuringArming()
+    {
+        // Issue #5: DND must report busy as soon as the user expresses
+        // intent (Arming), not only after settle expires. Otherwise an
+        // activity-timer expiry during Arming would surface the overlay.
+        var manager = CreateManager();
+        manager.Activate();
+
+        Assert.Equal(DndState.Arming, manager.CurrentState);
+        Assert.True(manager.IsBusy);
+    }
+
+    [Fact]
+    public void Deactivate_FromArming_IsNotBusy()
+    {
+        var manager = CreateManager();
+        manager.Activate();
+        manager.Deactivate();
+
+        Assert.False(manager.IsBusy);
+    }
+
     // --- Grace period and clearing ---
 
     [Fact]

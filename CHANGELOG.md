@@ -11,6 +11,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 - Add **Do not disturb** mode — defers the overlay while a video player or game is in the foreground. Activated via the tray menu with a 10-second settle period. An amber border shows during arming, a green flash confirms capture, and a red flash indicates when DND clears (either by switching away, locking the screen, or manually toggling off). Uses a 45-second grace period so brief alt-tabs don't interrupt.
 
+### Fixed
+
+- Fix Do Not Disturb failing to suppress the overlay when activated while the overlay was already showing or while still arming (issue #5 in `issues-with-dnd.md`). `DndManager.IsBusy` now reports busy from the moment DND is armed, the overlay state hides immediately when DND turns on, and the state machine defensively re-checks the busy predicate on entry to `OverlayDisplayed` so source-vs-trigger races no longer surface the overlay. Cross-source `BusyCleared` no longer pops the overlay while the other busy source (meeting indicator vs. DND) is still active.
+
 ## [2026.04.22]
 
 ### Fixed
