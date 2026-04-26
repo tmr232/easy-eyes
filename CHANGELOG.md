@@ -18,6 +18,7 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 ### Changed
 
 - Drop the captured process name from the Do Not Disturb tray menu label (issue #3 in `issues-with-dnd.md`). The label is now a plain "Do not disturb" with checkmark when active, plus an "(arming...)" suffix during the settle window. The user knows what they armed DND for, and exposing the underlying process name (e.g. `chrome` for a YouTube tab) was misleading. `IForegroundCapture.CapturedProcessName` and the `Process.GetProcessById` lookup in `ForegroundWindowStateSource` are gone.
+- Require the foreground window to be fullscreen for Do Not Disturb to arm and remain active (issue #4 in `issues-with-dnd.md`). At settle expiry, if the foreground window is not fullscreen the capture is rejected and DND falls back to Off with a red flash. While active, DND treats the captured process as "in focus" only when its current foreground window is still fullscreen — exiting fullscreen (e.g. closing a YouTube fullscreen view to browse other tabs) now correctly kicks off the grace period. Fullscreen is detected by comparing `GetWindowRect` against `MonitorFromWindow` bounds and excluding desktop/shell windows (`Progman`, `WorkerW`, `GetShellWindow`); style bits are intentionally not checked so borderless fullscreen games still qualify. `IForegroundCapture.Capture()` is now `bool TryCapture()` so callers can react to rejection.
 
 ## [2026.04.22]
 

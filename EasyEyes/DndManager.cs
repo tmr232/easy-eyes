@@ -150,7 +150,19 @@ public sealed class DndManager : IDisposable
 
     private void OnSettleExpired()
     {
-        _foregroundSource.Capture();
+        if (!_foregroundSource.TryCapture())
+        {
+            // Foreground window did not satisfy capture preconditions
+            // (typically: not a fullscreen window, see issue #4 in
+            // issues-with-dnd.md). Fall back to Off and signal the
+            // rejection visually with a red flash. The richer
+            // bloom-and-fade rejection animation lands with issue #1.
+            _borderFlashManager.ShowFlash(BorderFlashManager.ClearedColor);
+            CurrentState = DndState.Off;
+            StateChanged?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
         _borderFlashManager.ShowFlash(BorderFlashManager.LockedColor);
         _indicator.Enable();
         CurrentState = DndState.Active;
