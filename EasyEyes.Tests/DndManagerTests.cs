@@ -353,6 +353,53 @@ public class DndManagerTests
         Assert.Equal(DndState.Off, manager.CurrentState);
     }
 
+    // --- Capture rejection (issue #4) ---
+
+    [Fact]
+    public void SettleExpiry_WhenCaptureRejected_TransitionsToOff()
+    {
+        // Issue #4: if the foreground window isn't fullscreen at settle time,
+        // TryCapture returns false and DND falls back to Off rather than
+        // proceeding to Active.
+        _fakeCapture.CaptureSucceeds = false;
+        var manager = CreateManager();
+        manager.Activate();
+
+        _settleScheduler.Expire();
+
+        Assert.Equal(DndState.Off, manager.CurrentState);
+        Assert.False(manager.IsBusy);
+    }
+
+    [Fact]
+    public void SettleExpiry_WhenCaptureRejected_ShowsClearedFlash()
+    {
+        // Rejection is signalled visually with a red flash (the richer
+        // bloom-and-fade rejection animation lands with issue #1).
+        _fakeCapture.CaptureSucceeds = false;
+        var manager = CreateManager();
+        manager.Activate();
+
+        _settleScheduler.Expire();
+
+        Assert.Equal("flash", _flashFeedback.LastShowType);
+        Assert.Equal(BorderFlashManager.ClearedColor, _flashFeedback.LastColor);
+    }
+
+    [Fact]
+    public void SettleExpiry_WhenCaptureRejected_FiresStateChanged()
+    {
+        _fakeCapture.CaptureSucceeds = false;
+        var manager = CreateManager();
+        var states = new List<DndState>();
+        manager.StateChanged += (_, _) => states.Add(manager.CurrentState);
+
+        manager.Activate();
+        _settleScheduler.Expire();
+
+        Assert.Equal(new[] { DndState.Arming, DndState.Off }, states.ToArray());
+    }
+
     // --- Tray label formatting (issue #3) ---
 
     [Fact]
@@ -387,12 +434,21 @@ public class FakeForegroundCapture : IForegroundCapture
     public bool WasCaptured { get; set; }
     public bool WasReleased { get; set; }
 
+    /// <summary>
+    /// Controls the return value of <see cref="TryCapture"/>. Defaults to
+    /// <c>true</c> (capture succeeds) so existing tests do not need to be
+    /// updated. Tests for the rejection path (issue #4) set this to
+    /// <c>false</c>.
+    /// </summary>
+    public bool CaptureSucceeds { get; set; } = true;
+
     public event EventHandler? Activated;
     public event EventHandler? Deactivated;
 
-    public void Capture()
+    public bool TryCapture()
     {
         WasCaptured = true;
+        return CaptureSucceeds;
     }
 
     public void Release()

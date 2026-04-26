@@ -4,16 +4,19 @@ namespace EasyEyes;
 
 /// <summary>
 /// Monitors whether the foreground window belongs to a previously captured
-/// process. Used by the Do Not Disturb feature to detect when the user
-/// switches away from a video player or game.
+/// process AND is still in fullscreen mode. Used by the Do Not Disturb
+/// feature to detect when the user switches away from a video player or
+/// game (or leaves fullscreen, e.g. closes a YouTube fullscreen view to
+/// browse other tabs).
 /// </summary>
 /// <remarks>
 /// <para>
 /// Polls <see cref="NativeMethods.GetForegroundWindow"/> on a ThreadPool
-/// timer and compares the owning process ID against the captured value.
-/// Events are marshalled to the provided <see cref="Dispatcher"/> so
-/// subscribers always run on the UI thread (same pattern as
-/// <see cref="MediaDeviceMonitor"/>).
+/// timer and compares the owning process ID against the captured value,
+/// then additionally requires the foreground window to be fullscreen
+/// (issue #4 in <c>issues-with-dnd.md</c>). Events are marshalled to the
+/// provided <see cref="Dispatcher"/> so subscribers always run on the UI
+/// thread (same pattern as <see cref="MediaDeviceMonitor"/>).
 /// </para>
 /// <para>
 /// Uses process ID rather than window handle so that if the target app
@@ -31,15 +34,17 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
     private bool _disposed;
 
     /// <inheritdoc />
-    public bool IsActive => _capturedProcessId.HasValue && GetForegroundProcessId() == _capturedProcessId;
+    public bool IsActive => _capturedProcessId.HasValue && IsForegroundActive(_capturedProcessId.Value);
 
     /// <summary>
-    /// Fires when the foreground window returns to the captured process.
+    /// Fires when the foreground window returns to the captured process and
+    /// is fullscreen.
     /// </summary>
     public event EventHandler? Activated;
 
     /// <summary>
-    /// Fires when the foreground window leaves the captured process.
+    /// Fires when the foreground window leaves the captured process or
+    /// stops being fullscreen.
     /// </summary>
     public event EventHandler? Deactivated;
 
@@ -51,13 +56,29 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
 
     /// <summary>
     /// Records the current foreground window's process and starts polling.
+    /// Refuses (returns <c>false</c>) when the foreground window is not
+    /// fullscreen — DND is meant for fullscreen media/games, not for
+    /// arbitrary windowed apps (issue #4 in <c>issues-with-dnd.md</c>).
     /// </summary>
-    public void Capture()
+    public bool TryCapture()
     {
-        _capturedProcessId = GetForegroundProcessId();
-        _lastActive = _capturedProcessId.HasValue;
+        var hwnd = NativeMethods.GetForegroundWindow();
+        if (hwnd == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        if (!WindowInspector.IsFullscreen(hwnd))
+        {
+            return false;
+        }
+
+        _ = NativeMethods.GetWindowThreadProcessId(hwnd, out uint processId);
+        _capturedProcessId = processId;
+        _lastActive = true;
         _pollTimer?.Dispose();
         _pollTimer = new Timer(Poll, null, _pollInterval, _pollInterval);
+        return true;
     }
 
     /// <summary>
@@ -84,7 +105,7 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
             return;
         }
 
-        bool active = GetForegroundProcessId() == _capturedProcessId;
+        bool active = IsForegroundActive(_capturedProcessId.Value);
         if (active != _lastActive)
         {
             _lastActive = active;
@@ -102,16 +123,16 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
         }
     }
 
-    private static uint? GetForegroundProcessId()
+    private static bool IsForegroundActive(uint capturedProcessId)
     {
         var hwnd = NativeMethods.GetForegroundWindow();
         if (hwnd == IntPtr.Zero)
         {
-            return null;
+            return false;
         }
 
         _ = NativeMethods.GetWindowThreadProcessId(hwnd, out uint processId);
-        return processId;
+        return processId == capturedProcessId && WindowInspector.IsFullscreen(hwnd);
     }
 
     public void Dispose()

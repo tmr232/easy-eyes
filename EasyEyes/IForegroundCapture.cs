@@ -9,8 +9,12 @@ public interface IForegroundCapture : IStateSource
 {
     /// <summary>
     /// Records the current foreground window's process and starts monitoring.
+    /// Returns <c>false</c> when the foreground window does not satisfy the
+    /// capture preconditions (e.g. not a fullscreen window, see issue #4 in
+    /// <c>issues-with-dnd.md</c>); in that case nothing is captured and no
+    /// polling starts.
     /// </summary>
-    void Capture();
+    bool TryCapture();
 
     /// <summary>
     /// Clears the captured process and stops monitoring.
