@@ -31,6 +31,21 @@ public sealed class BorderFlashManager : IDndFlashFeedback, IDisposable
     public static readonly Color ClearedColor = (Color)ColorConverter.ConvertFromString("#CC0000");
 
     /// <summary>
+    /// Starting color of the grace-period hint border (issue #2 in
+    /// <c>issues-with-dnd.md</c>) — amber, matching the arming color
+    /// since both signal a transitional warning state.
+    /// </summary>
+    public static readonly Color GraceHintStartColor = ArmingColor;
+
+    /// <summary>
+    /// End color of the grace-period hint border — the same red used
+    /// for cleared, so when the grace timer expires the cleared
+    /// <see cref="BloomAndFade"/> flows continuously from the fully red
+    /// hint border into the bloom finale.
+    /// </summary>
+    public static readonly Color GraceHintEndColor = ClearedColor;
+
+    /// <summary>
     /// Currently visible borders (one per monitor) — either persistent
     /// (post-arming fade-in) or in-progress with a bloom finale running.
     /// </summary>
@@ -97,6 +112,35 @@ public sealed class BorderFlashManager : IDndFlashFeedback, IDisposable
 
             _activeWindows.Clear();
         }
+    }
+
+    /// <inheritdoc />
+    public void ShowGraceHint(Color startColor, Color endColor, TimeSpan duration)
+    {
+        // The grace hint replaces any existing border (e.g. a leftover
+        // bloom that hasn't finished fading yet, or a rapid
+        // away→back→away sequence where the last cancellation hasn't
+        // closed yet).
+        KillAll();
+
+        foreach (var screen in Forms.Screen.AllScreens)
+        {
+            var window = new BorderFlashWindow(screen, startColor);
+            window.Show();
+            window.ShowGraceHint(startColor, endColor, duration);
+            _activeWindows.Add(window);
+        }
+    }
+
+    /// <inheritdoc />
+    public void CancelGraceHint(Color confirmationColor)
+    {
+        // Reuse BloomAndFade so the cancellation looks consistent with
+        // the rest of the visual language (cross-fade to confirmation
+        // color, hold, fade out). If there's no active window we still
+        // produce the confirmation flash for free via BloomAndFade's
+        // create-from-scratch path.
+        BloomAndFade(confirmationColor);
     }
 
     /// <inheritdoc />

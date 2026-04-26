@@ -353,6 +353,88 @@ public class DndManagerTests
         Assert.Equal(DndState.Off, manager.CurrentState);
     }
 
+    // --- Grace-period hint (issue #2) ---
+
+    [Fact]
+    public void Active_WhenSourceDeactivates_ShowsGraceHint()
+    {
+        // Issue #2: while DND is Active, the moment the user switches away
+        // from the captured app the grace hint border appears so the user
+        // can see the grace timer running. Colors come from BorderFlashManager.
+        _fakeCapture.IsActive = true;
+        var manager = CreateManager();
+        manager.Activate();
+        _settleScheduler.Expire();
+        _flashFeedback.Reset();
+
+        _fakeCapture.SimulateDeactivated();
+
+        Assert.Equal("graceHint", _flashFeedback.LastShowType);
+        Assert.Equal(BorderFlashManager.GraceHintStartColor, _flashFeedback.LastGraceHintStartColor);
+        Assert.Equal(BorderFlashManager.GraceHintEndColor, _flashFeedback.LastGraceHintEndColor);
+        Assert.Equal(GracePeriod, _flashFeedback.LastGraceHintDuration);
+    }
+
+    [Fact]
+    public void Active_WhenSourceReactivatesWithinGrace_CancelsGraceHintWithGreen()
+    {
+        _fakeCapture.IsActive = true;
+        var manager = CreateManager();
+        manager.Activate();
+        _settleScheduler.Expire();
+        _fakeCapture.SimulateDeactivated();
+        _flashFeedback.Reset();
+
+        _fakeCapture.SimulateActivated();
+
+        Assert.Equal("cancelGraceHint", _flashFeedback.LastShowType);
+        Assert.Equal(BorderFlashManager.LockedColor, _flashFeedback.LastColor);
+    }
+
+    [Fact]
+    public void Off_WhenSourceFiresEvents_DoesNothing()
+    {
+        // Source events while not Active (e.g. after manual Deactivate or
+        // after grace expiry) must not surface any visual change.
+        var manager = CreateManager();
+
+        _fakeCapture.SimulateDeactivated();
+        _fakeCapture.SimulateActivated();
+
+        Assert.Null(_flashFeedback.LastShowType);
+    }
+
+    [Fact]
+    public void Arming_WhenSourceFiresEvents_DoesNothing()
+    {
+        var manager = CreateManager();
+        manager.Activate();
+        _flashFeedback.Reset();
+
+        _fakeCapture.SimulateDeactivated();
+        _fakeCapture.SimulateActivated();
+
+        Assert.Null(_flashFeedback.LastShowType);
+    }
+
+    [Fact]
+    public void Active_GraceHintRetriggers_OnRapidAwayBackAway()
+    {
+        // Away → back → away within grace: the second away should show a
+        // fresh grace hint (the user got "another 45 seconds").
+        _fakeCapture.IsActive = true;
+        var manager = CreateManager();
+        manager.Activate();
+        _settleScheduler.Expire();
+
+        _fakeCapture.SimulateDeactivated();
+        _fakeCapture.SimulateActivated();
+        _flashFeedback.Reset();
+        _fakeCapture.SimulateDeactivated();
+
+        Assert.Equal("graceHint", _flashFeedback.LastShowType);
+    }
+
     // --- Capture rejection (issue #4) ---
 
     [Fact]
@@ -475,11 +557,17 @@ public class FakeDndFlashFeedback : IDndFlashFeedback
 {
     public string? LastShowType { get; private set; }
     public Color? LastColor { get; private set; }
+    public Color? LastGraceHintStartColor { get; private set; }
+    public Color? LastGraceHintEndColor { get; private set; }
+    public TimeSpan? LastGraceHintDuration { get; private set; }
 
     public void Reset()
     {
         LastShowType = null;
         LastColor = null;
+        LastGraceHintStartColor = null;
+        LastGraceHintEndColor = null;
+        LastGraceHintDuration = null;
     }
 
     public void ShowPersistent(Color color)
@@ -492,6 +580,20 @@ public class FakeDndFlashFeedback : IDndFlashFeedback
     {
         LastShowType = "bloom";
         LastColor = color;
+    }
+
+    public void ShowGraceHint(Color startColor, Color endColor, TimeSpan duration)
+    {
+        LastShowType = "graceHint";
+        LastGraceHintStartColor = startColor;
+        LastGraceHintEndColor = endColor;
+        LastGraceHintDuration = duration;
+    }
+
+    public void CancelGraceHint(Color confirmationColor)
+    {
+        LastShowType = "cancelGraceHint";
+        LastColor = confirmationColor;
     }
 
     public void Hide()

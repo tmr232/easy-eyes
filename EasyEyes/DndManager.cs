@@ -46,6 +46,7 @@ public sealed class DndManager : IDisposable
     private readonly BusyIndicator _indicator;
     private readonly ITimerScheduler _settleScheduler;
     private readonly TimeSpan _settleDuration;
+    private readonly TimeSpan _gracePeriod;
     private bool _disposed;
 
     /// <summary>
@@ -96,10 +97,18 @@ public sealed class DndManager : IDisposable
         _borderFlashManager = borderFlashManager;
         _settleScheduler = settleScheduler;
         _settleDuration = settleDuration;
+        _gracePeriod = gracePeriod;
 
         _indicator = new BusyIndicator(foregroundSource, graceScheduler, gracePeriod);
         _indicator.Cleared += OnIndicatorCleared;
         _indicator.BecameActive += OnIndicatorBecameActive;
+
+        // Drive the grace-hint visuals (issue #2 in issues-with-dnd.md)
+        // directly from the foreground source. BusyIndicator still owns
+        // the grace-period bookkeeping; we only listen here for the
+        // visual handoff so the user can see the grace timer running.
+        _foregroundSource.Deactivated += OnForegroundDeactivated;
+        _foregroundSource.Activated += OnForegroundActivated;
     }
 
     /// <summary>
@@ -182,6 +191,41 @@ public sealed class DndManager : IDisposable
         BecameActive?.Invoke(this, e);
     }
 
+    /// <summary>
+    /// Foreground source signalled the user left the captured app.
+    /// While DND is Active this kicks off the visible grace-period hint
+    /// (amber → red, opacity 0 → 1, over the grace duration). Ignored in
+    /// Off / Arming / during the synchronous Release in OnIndicatorCleared
+    /// / Deactivate, where state has already been reset.
+    /// </summary>
+    private void OnForegroundDeactivated(object? sender, EventArgs e)
+    {
+        if (CurrentState != DndState.Active)
+        {
+            return;
+        }
+
+        _borderFlashManager.ShowGraceHint(
+            BorderFlashManager.GraceHintStartColor,
+            BorderFlashManager.GraceHintEndColor,
+            _gracePeriod);
+    }
+
+    /// <summary>
+    /// Foreground source signalled the user returned to the captured
+    /// app. While DND is Active this cancels the grace-period hint with
+    /// a green confirmation bloom-and-fade.
+    /// </summary>
+    private void OnForegroundActivated(object? sender, EventArgs e)
+    {
+        if (CurrentState != DndState.Active)
+        {
+            return;
+        }
+
+        _borderFlashManager.CancelGraceHint(BorderFlashManager.LockedColor);
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -190,6 +234,8 @@ public sealed class DndManager : IDisposable
         }
 
         _disposed = true;
+        _foregroundSource.Deactivated -= OnForegroundDeactivated;
+        _foregroundSource.Activated -= OnForegroundActivated;
         _settleScheduler.Cancel();
         _indicator.Disable();
         _foregroundSource.Release();
