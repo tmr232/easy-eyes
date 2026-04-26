@@ -91,7 +91,7 @@ public class DndManagerTests
 
         _settleScheduler.Expire();
 
-        Assert.Equal("flash", _flashFeedback.LastShowType);
+        Assert.Equal("bloom", _flashFeedback.LastShowType);
         Assert.Equal(BorderFlashManager.LockedColor, _flashFeedback.LastColor);
     }
 
@@ -169,7 +169,7 @@ public class DndManagerTests
         _fakeCapture.SimulateDeactivated();
         _graceScheduler.Expire();
 
-        Assert.Equal("flash", _flashFeedback.LastShowType);
+        Assert.Equal("bloom", _flashFeedback.LastShowType);
         Assert.Equal(BorderFlashManager.ClearedColor, _flashFeedback.LastColor);
     }
 
@@ -294,7 +294,7 @@ public class DndManagerTests
 
         manager.Deactivate();
 
-        Assert.Equal("flash", _flashFeedback.LastShowType);
+        Assert.Equal("bloom", _flashFeedback.LastShowType);
         Assert.Equal(BorderFlashManager.ClearedColor, _flashFeedback.LastColor);
     }
 
@@ -348,7 +348,7 @@ public class DndManagerTests
         var manager = CreateManager();
         manager.FlashCleared();
 
-        Assert.Equal("flash", _flashFeedback.LastShowType);
+        Assert.Equal("bloom", _flashFeedback.LastShowType);
         Assert.Equal(BorderFlashManager.ClearedColor, _flashFeedback.LastColor);
         Assert.Equal(DndState.Off, manager.CurrentState);
     }
@@ -382,7 +382,7 @@ public class DndManagerTests
 
         _settleScheduler.Expire();
 
-        Assert.Equal("flash", _flashFeedback.LastShowType);
+        Assert.Equal("bloom", _flashFeedback.LastShowType);
         Assert.Equal(BorderFlashManager.ClearedColor, _flashFeedback.LastColor);
     }
 
@@ -488,9 +488,9 @@ public class FakeDndFlashFeedback : IDndFlashFeedback
         LastColor = color;
     }
 
-    public void ShowFlash(Color color)
+    public void BloomAndFade(Color color)
     {
-        LastShowType = "flash";
+        LastShowType = "bloom";
         LastColor = color;
     }
 

@@ -7,11 +7,7 @@
         Topmost="True"
         ShowInTaskbar="False"
         ShowActivated="False"
-        ResizeMode="NoResize">
-    <Grid>
-        <Border x:Name="FlashBorder"
-                BorderThickness="6"
-                Background="Transparent"
-                IsHitTestVisible="False" />
-    </Grid>
+        ResizeMode="NoResize"
+        Opacity="0">
+    <Grid x:Name="RootGrid" IsHitTestVisible="False" />
 </Window>

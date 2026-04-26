@@ -133,19 +133,19 @@ public sealed class DndManager : IDisposable
         _settleScheduler.Cancel();
         _indicator.Disable();
         _foregroundSource.Release();
-        _borderFlashManager.ShowFlash(BorderFlashManager.ClearedColor);
+        _borderFlashManager.BloomAndFade(BorderFlashManager.ClearedColor);
         CurrentState = DndState.Off;
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
-    /// Shows a red border flash without changing DND state. Used by
-    /// <see cref="MainWindow"/> to indicate on screen unlock that DND
+    /// Shows a red bloom-and-fade border without changing DND state. Used
+    /// by <see cref="MainWindow"/> to indicate on screen unlock that DND
     /// was cleared by a prior screen lock.
     /// </summary>
     public void FlashCleared()
     {
-        _borderFlashManager.ShowFlash(BorderFlashManager.ClearedColor);
+        _borderFlashManager.BloomAndFade(BorderFlashManager.ClearedColor);
     }
 
     private void OnSettleExpired()
@@ -155,15 +155,14 @@ public sealed class DndManager : IDisposable
             // Foreground window did not satisfy capture preconditions
             // (typically: not a fullscreen window, see issue #4 in
             // issues-with-dnd.md). Fall back to Off and signal the
-            // rejection visually with a red flash. The richer
-            // bloom-and-fade rejection animation lands with issue #1.
-            _borderFlashManager.ShowFlash(BorderFlashManager.ClearedColor);
+            // rejection visually with a red bloom-and-fade.
+            _borderFlashManager.BloomAndFade(BorderFlashManager.ClearedColor);
             CurrentState = DndState.Off;
             StateChanged?.Invoke(this, EventArgs.Empty);
             return;
         }
 
-        _borderFlashManager.ShowFlash(BorderFlashManager.LockedColor);
+        _borderFlashManager.BloomAndFade(BorderFlashManager.LockedColor);
         _indicator.Enable();
         CurrentState = DndState.Active;
         StateChanged?.Invoke(this, EventArgs.Empty);
@@ -172,7 +171,7 @@ public sealed class DndManager : IDisposable
     private void OnIndicatorCleared(object? sender, EventArgs e)
     {
         _foregroundSource.Release();
-        _borderFlashManager.ShowFlash(BorderFlashManager.ClearedColor);
+        _borderFlashManager.BloomAndFade(BorderFlashManager.ClearedColor);
         CurrentState = DndState.Off;
         StateChanged?.Invoke(this, EventArgs.Empty);
         BusyCleared?.Invoke(this, e);
