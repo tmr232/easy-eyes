@@ -210,6 +210,13 @@ public partial class BorderFlashWindow : Window
     /// close. Used both for the "captured" green flash (success) and the
     /// "cleared" / "rejected" red flash (failure).
     /// </summary>
+    /// <remarks>
+    /// The opacity sequence is keyframed (boost-to-1 → hold → fade-to-0)
+    /// so the bloom always presents a clean burst even when invoked
+    /// while a grace-hint animation has only ramped opacity partway up
+    /// (issue #2 in <c>issues-with-dnd.md</c>). When opacity is already
+    /// at 1 (the common case) the boost segment is a no-op.
+    /// </remarks>
     public void BloomAndFade(Color targetColor)
     {
         // 1. Cross-fade the eight gradient-stop colors (opaque outer +
@@ -238,16 +245,76 @@ public partial class BorderFlashWindow : Window
 
         _currentColor = targetColor;
 
-        // 2. After the color cross-fade settles and a brief hold, fade out
-        //    the whole window and close.
-        var fadeOut = new DoubleAnimation
+        // 2. Boost opacity to 1 (no-op if already there), hold, fade out
+        //    to 0, then close. KeyFrames give us a single animation that
+        //    handles the whole sequence; the first segment uses the
+        //    handoff snapshot so a partial grace-hint opacity is brought
+        //    up cleanly into the bloom.
+        var opacityAnim = new DoubleAnimationUsingKeyFrames();
+        opacityAnim.KeyFrames.Add(new LinearDoubleKeyFrame(1.0, KeyTime.FromTimeSpan(BloomColorDuration)));
+        opacityAnim.KeyFrames.Add(new LinearDoubleKeyFrame(1.0, KeyTime.FromTimeSpan(BloomColorDuration + BloomHoldDuration)));
+        opacityAnim.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, KeyTime.FromTimeSpan(BloomColorDuration + BloomHoldDuration + FadeOutDuration)));
+        opacityAnim.Completed += (_, _) => Close();
+        BeginAnimation(OpacityProperty, opacityAnim);
+    }
+
+    /// <summary>
+    /// Plays the grace-period hint: opacity ramps 0 → 1 linearly over
+    /// <paramref name="duration"/> while the gradient color cross-fades
+    /// linearly from <paramref name="startColor"/> to
+    /// <paramref name="endColor"/> in lockstep. The intent (issue #2 in
+    /// <c>issues-with-dnd.md</c>) is a warning that gets more
+    /// attention-grabbing as the grace period runs out — at the end the
+    /// border is fully <paramref name="endColor"/> so the cleared
+    /// <see cref="BloomAndFade"/> (called by the manager when the grace
+    /// timer expires) is a continuous handoff rather than a fresh burst.
+    /// </summary>
+    /// <remarks>
+    /// Tuning: the timing here is intentionally simple (parallel linear
+    /// animations). To change the curve, swap the easing on either
+    /// animation; to split the timing (e.g. opacity ramps faster than
+    /// the color shift), give them different durations and adjust
+    /// callers.
+    /// </remarks>
+    public void ShowGraceHint(Color startColor, Color endColor, TimeSpan duration)
+    {
+        // Color cross-fade on every gradient stop (eight in total, two
+        // per side — outer opaque, inner transparent).
+        var startTransparent = Color.FromArgb(0, startColor.R, startColor.G, startColor.B);
+        var endTransparent = Color.FromArgb(0, endColor.R, endColor.G, endColor.B);
+        foreach (var stop in _outerStops)
         {
-            To = 0.0,
-            BeginTime = BloomColorDuration + BloomHoldDuration,
-            Duration = FadeOutDuration,
-            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn },
+            stop.Color = startColor;
+            var anim = new ColorAnimation
+            {
+                To = endColor,
+                Duration = duration,
+            };
+            stop.BeginAnimation(GradientStop.ColorProperty, anim);
+        }
+
+        foreach (var stop in _innerStops)
+        {
+            stop.Color = startTransparent;
+            var anim = new ColorAnimation
+            {
+                To = endTransparent,
+                Duration = duration,
+            };
+            stop.BeginAnimation(GradientStop.ColorProperty, anim);
+        }
+
+        _currentColor = endColor;
+
+        // Opacity ramps 0 → 1 in lockstep. HoldEnd ensures it sits at 1
+        // when the duration elapses so the manager's BloomAndFade picks
+        // up at full visibility for the cleared finale.
+        var opacityAnim = new DoubleAnimation
+        {
+            From = 0.0,
+            To = 1.0,
+            Duration = duration,
         };
-        fadeOut.Completed += (_, _) => Close();
-        BeginAnimation(OpacityProperty, fadeOut);
+        BeginAnimation(OpacityProperty, opacityAnim);
     }
 }
