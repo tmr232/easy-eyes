@@ -12,9 +12,11 @@ namespace EasyEyes;
 
 /// <summary>
 /// A click-through window that paints a soft glowing border around a single
-/// monitor using four trapezoidal polygons (one per side, mitred at the
-/// corners) filled with a perpendicular linear gradient (opaque at the
-/// outer edge, transparent at the inner edge). Used by
+/// monitor using eight polygons: four straight edges filled with a
+/// perpendicular linear gradient (opaque at the screen edge, transparent at
+/// the inner side) and four corner squares filled with a radial gradient
+/// whose origin sits at the inner corner so the falloff is rounded and
+/// joins the edge gradients seamlessly. Used by
 /// <see cref="BorderFlashManager"/> to provide visual feedback for the
 /// Do Not Disturb feature.
 /// </summary>
@@ -22,8 +24,9 @@ namespace EasyEyes;
 /// <para>
 /// The glow look (issue #1 in <c>issues-with-dnd.md</c>) replaces the
 /// previous flat 6 px border. Each polygon's gradient stops are kept as
-/// fields so the color can be swapped cheaply (8 writes total for a
-/// cross-fade). Fade in/out and bloom are driven by storyboards.
+/// fields so the color can be swapped cheaply (16 writes total for a
+/// cross-fade — opaque + transparent stops on each of four edges and four
+/// corners). Fade in/out and bloom are driven by storyboards.
 /// </para>
 /// <para>
 /// Like <see cref="OverlayWindow"/>, the window is click-through and will
@@ -88,10 +91,26 @@ public partial class BorderFlashWindow : Window
     }
 
     /// <summary>
-    /// Constructs the four trapezoidal polygons that form the glow frame.
-    /// Built after positioning because the trapezoid points depend on the
-    /// runtime monitor dimensions in DIPs.
+    /// Constructs the eight polygons that form the glow frame: four
+    /// rectangular edges with linear gradients and four square corners with
+    /// radial gradients. Built after positioning because the points depend
+    /// on the runtime monitor dimensions in DIPs.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The polygons tile without overlap or gap. The seams between an edge
+    /// and a corner are perfectly aligned: along a seam (e.g. <c>x=t</c>
+    /// between the top edge and the top-left corner) the edge's linear
+    /// gradient gives <c>alpha = 1 - y/t</c>, and the corner's radial
+    /// gradient — origin at the inner corner <c>(1,1)</c> in relative
+    /// coordinates with <c>RadiusX = RadiusY = 1</c> — gives
+    /// <c>alpha = distance/radius = 1 - y/t</c> as well, since the relative
+    /// distance from <c>(1,1)</c> along the seam is purely a function of
+    /// <c>y</c>. Inside the corner the level sets are concentric arcs, so
+    /// the visual falloff is rounded instead of producing the diagonal
+    /// miter artifact that the previous trapezoidal layout had.
+    /// </para>
+    /// </remarks>
     private void BuildGlowPolygons()
     {
         double w = Width;
@@ -99,39 +118,59 @@ public partial class BorderFlashWindow : Window
         double t = GlowThickness;
         var transparent = Color.FromArgb(0, _currentColor.R, _currentColor.G, _currentColor.B);
 
-        // Trapezoid points are in window coordinates; the four sides tile
-        // with 45° miter seams (no overlap, no gap).
-        // Top:    (0,0) (w,0) (w-t,t) (t,t)
-        // Bottom: (0,h) (w,h) (w-t,h-t) (t,h-t)
-        // Left:   (0,0) (t,t) (t,h-t) (0,h)
-        // Right:  (w,0) (w,h) (w-t,h-t) (w-t,t)
-        var top = MakePolygon(
-            [new Point(0, 0), new Point(w, 0), new Point(w - t, t), new Point(t, t)],
+        // Edges: rectangles tiled between corner squares.
+        // Top:    x∈[t, w-t], y∈[0, t]
+        // Bottom: x∈[t, w-t], y∈[h-t, h]
+        // Left:   x∈[0, t],   y∈[t, h-t]
+        // Right:  x∈[w-t, w], y∈[t, h-t]
+        var top = MakeEdgePolygon(
+            [new Point(t, 0), new Point(w - t, 0), new Point(w - t, t), new Point(t, t)],
             new Point(0.5, 0), new Point(0.5, 1), transparent);
-        var bottom = MakePolygon(
-            [new Point(0, h), new Point(w, h), new Point(w - t, h - t), new Point(t, h - t)],
+        var bottom = MakeEdgePolygon(
+            [new Point(t, h - t), new Point(w - t, h - t), new Point(w - t, h), new Point(t, h)],
             new Point(0.5, 1), new Point(0.5, 0), transparent);
-        var left = MakePolygon(
-            [new Point(0, 0), new Point(t, t), new Point(t, h - t), new Point(0, h)],
+        var left = MakeEdgePolygon(
+            [new Point(0, t), new Point(t, t), new Point(t, h - t), new Point(0, h - t)],
             new Point(0, 0.5), new Point(1, 0.5), transparent);
-        var right = MakePolygon(
-            [new Point(w, 0), new Point(w, h), new Point(w - t, h - t), new Point(w - t, t)],
+        var right = MakeEdgePolygon(
+            [new Point(w - t, t), new Point(w, t), new Point(w, h - t), new Point(w - t, h - t)],
             new Point(1, 0.5), new Point(0, 0.5), transparent);
+
+        // Corners: square polygons whose radial gradient origin is the
+        // inner corner (relative coords). The origin and Center coincide,
+        // RadiusX = RadiusY = 1, so the gradient is a circular falloff
+        // rooted at the inside of the bend.
+        var topLeft = MakeCornerPolygon(
+            [new Point(0, 0), new Point(t, 0), new Point(t, t), new Point(0, t)],
+            new Point(1, 1), transparent);
+        var topRight = MakeCornerPolygon(
+            [new Point(w - t, 0), new Point(w, 0), new Point(w, t), new Point(w - t, t)],
+            new Point(0, 1), transparent);
+        var bottomLeft = MakeCornerPolygon(
+            [new Point(0, h - t), new Point(t, h - t), new Point(t, h), new Point(0, h)],
+            new Point(1, 0), transparent);
+        var bottomRight = MakeCornerPolygon(
+            [new Point(w - t, h - t), new Point(w, h - t), new Point(w, h), new Point(w - t, h)],
+            new Point(0, 0), transparent);
 
         RootGrid.Children.Add(top);
         RootGrid.Children.Add(bottom);
         RootGrid.Children.Add(left);
         RootGrid.Children.Add(right);
+        RootGrid.Children.Add(topLeft);
+        RootGrid.Children.Add(topRight);
+        RootGrid.Children.Add(bottomLeft);
+        RootGrid.Children.Add(bottomRight);
     }
 
     /// <summary>
-    /// Creates a polygon with a linear gradient brush going from the outer
-    /// edge (opaque <see cref="_currentColor"/>) to the inner edge
+    /// Creates an edge polygon with a linear gradient brush going from the
+    /// outer edge (opaque <see cref="_currentColor"/>) to the inner edge
     /// (transparent). The outer/inner GradientStops are recorded in
     /// <see cref="_outerStops"/> / <see cref="_innerStops"/> so colors can
     /// be cross-faded later.
     /// </summary>
-    private Polygon MakePolygon(Point[] points, Point gradientStart, Point gradientEnd, Color transparent)
+    private Polygon MakeEdgePolygon(Point[] points, Point gradientStart, Point gradientEnd, Color transparent)
     {
         var outerStop = new GradientStop(_currentColor, 0.0);
         var innerStop = new GradientStop(transparent, 1.0);
@@ -147,9 +186,47 @@ public partial class BorderFlashWindow : Window
         brush.GradientStops.Add(outerStop);
         brush.GradientStops.Add(innerStop);
 
+        return MakePolygon(points, brush);
+    }
+
+    /// <summary>
+    /// Creates a corner polygon (a square in window coordinates) with a
+    /// radial gradient brush. The gradient is rooted at the *inner* corner
+    /// (<paramref name="innerCorner"/> in relative-to-bounding-box coords)
+    /// with offset 0 transparent and offset 1 opaque at radius 1, so that
+    /// along the two seams shared with adjacent edges the alpha varies
+    /// linearly from 0 (inner end) to 1 (outer end) — matching the
+    /// neighbouring edge's linear gradient exactly. Outside the unit
+    /// circle (toward the screen-edge corner) the brush stays at the
+    /// opaque stop, so the screen edge itself reads as solid color all the
+    /// way around.
+    /// </summary>
+    private Polygon MakeCornerPolygon(Point[] points, Point innerCorner, Color transparent)
+    {
+        var innerStop = new GradientStop(transparent, 0.0);
+        var outerStop = new GradientStop(_currentColor, 1.0);
+        _outerStops = [.. _outerStops, outerStop];
+        _innerStops = [.. _innerStops, innerStop];
+
+        var brush = new RadialGradientBrush
+        {
+            Center = innerCorner,
+            GradientOrigin = innerCorner,
+            RadiusX = 1.0,
+            RadiusY = 1.0,
+            MappingMode = BrushMappingMode.RelativeToBoundingBox,
+        };
+        brush.GradientStops.Add(innerStop);
+        brush.GradientStops.Add(outerStop);
+
+        return MakePolygon(points, brush);
+    }
+
+    private static Polygon MakePolygon(Point[] points, System.Windows.Media.Brush fill)
+    {
         var polygon = new Polygon
         {
-            Fill = brush,
+            Fill = fill,
             IsHitTestVisible = false,
         };
         foreach (var p in points)
