@@ -12,11 +12,11 @@ namespace EasyEyes;
 /// <remarks>
 /// <para>
 /// Borders are rendered by <see cref="BorderFlashWindow"/> as four
-/// trapezoidal polygons filled with linear gradients (issue #1 in
-/// <c>issues-with-dnd.md</c>). The manager owns one window per monitor
-/// for the active border and tracks any windows that are currently
-/// fading out so that a new <see cref="ShowPersistent"/> call can kill
-/// them immediately rather than letting two animations stack.
+/// linear-gradient edges joined by four radial-gradient corners (issue
+/// #1 in <c>issues-with-dnd.md</c>). The manager owns one window per
+/// monitor for the active border and tracks any windows that are
+/// currently fading out so that a new <see cref="ShowPersistent"/> call
+/// can kill them immediately rather than letting two animations stack.
 /// </para>
 /// </remarks>
 public sealed class BorderFlashManager : IDndFlashFeedback, IDisposable
