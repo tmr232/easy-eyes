@@ -7,6 +7,21 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+### Added
+
+- Add **Do not disturb** mode — defers the overlay while a video player or game is in the foreground. Activated via the tray menu with a 10-second settle period. An amber border shows during arming, a green flash confirms capture, and a red flash indicates when DND clears (either by switching away, locking the screen, or manually toggling off). Uses a 45-second grace period so brief alt-tabs don't interrupt.
+- Add a visible grace-period hint to Do Not Disturb (issue #2 in `issues-with-dnd.md`). When the user switches away from the captured app, a glowing border fades in over the 45-second grace duration, transitioning amber → red in lockstep with opacity 0 → 1. The border is barely visible at the start of grace and fully red at the end, so attention ramps up as the deadline approaches. If the user returns within grace, the border cross-fades to green and bloom-fades out as confirmation; if the grace timer expires, the cleared red bloom-and-fade flows continuously from the now-fully-red hint border.
+
+### Fixed
+
+- Fix Do Not Disturb failing to suppress the overlay when activated while the overlay was already showing or while still arming (issue #5 in `issues-with-dnd.md`). `DndManager.IsBusy` now reports busy from the moment DND is armed, the overlay state hides immediately when DND turns on, and the state machine defensively re-checks the busy predicate on entry to `OverlayDisplayed` so source-vs-trigger races no longer surface the overlay. Cross-source `BusyCleared` no longer pops the overlay while the other busy source (meeting indicator vs. DND) is still active.
+
+### Changed
+
+- Drop the captured process name from the Do Not Disturb tray menu label (issue #3 in `issues-with-dnd.md`). The label is now a plain "Do not disturb" with checkmark when active, plus an "(arming...)" suffix during the settle window. The user knows what they armed DND for, and exposing the underlying process name (e.g. `chrome` for a YouTube tab) was misleading. `IForegroundCapture.CapturedProcessName` and the `Process.GetProcessById` lookup in `ForegroundWindowStateSource` are gone.
+- Require the foreground window to be fullscreen for Do Not Disturb to arm and remain active (issue #4 in `issues-with-dnd.md`). At settle expiry, if the foreground window is not fullscreen the capture is rejected and DND falls back to Off with a red flash. While active, DND treats the captured process as "in focus" only when its current foreground window is still fullscreen — exiting fullscreen (e.g. closing a YouTube fullscreen view to browse other tabs) now correctly kicks off the grace period. Fullscreen is detected by comparing `GetWindowRect` against `MonitorFromWindow` bounds and excluding desktop/shell windows (`Progman`, `WorkerW`, `GetShellWindow`); style bits are intentionally not checked so borderless fullscreen games still qualify. `IForegroundCapture.Capture()` is now `bool TryCapture()` so callers can react to rejection.
+- Replace the flat 6 px Do Not Disturb borders with animated, soft-glow borders (issue #1 in `issues-with-dnd.md`). Each `BorderFlashWindow` now paints four rectangular edge polygons filled with a perpendicular linear gradient (opaque outer edge → transparent inner edge) joined by four square corner polygons filled with a radial gradient rooted at the inner corner — picture-frame look with rounded glow falloff and seamless edge↔corner transitions. The arming border fades in over 200 ms and holds; capture-success (green), capture-rejected (red), and cleared (red) all play a bloom-and-fade finale (cross-fade color, hold, fade out). `IDndFlashFeedback.ShowFlash` is replaced by `BloomAndFade(Color)`; `Hide` is now a fade-out rather than an instant close, and the manager kills any in-flight fade-out instantly when a new persistent border replaces it.
+
 ## [2026.04.22]
 
 ### Fixed

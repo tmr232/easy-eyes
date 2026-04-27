@@ -13,7 +13,11 @@ public partial class MainWindow : Window
     private readonly OverlayManager _overlayManager = new();
     private readonly MediaDeviceMonitor _mediaDeviceMonitor;
     private readonly BusyIndicatorManager _busyIndicatorManager;
+    private readonly ForegroundWindowStateSource _foregroundSource;
+    private readonly BorderFlashManager _borderFlashManager;
+    private readonly DndManager _dndManager;
     private readonly TrayIconManager _trayIconManager;
+    private bool _wasDndActiveOnLock;
 
     public MainWindow()
     {
@@ -35,7 +39,17 @@ public partial class MainWindow : Window
             graceScheduler: new DispatcherTimerScheduler(),
             gracePeriod: TimeSpan.FromSeconds(5));
 
-        _stateMachine = new EasyEyesStateMachine(_actions, () => _busyIndicatorManager.IsBusy);
+        _foregroundSource = new ForegroundWindowStateSource(TimeSpan.FromSeconds(1), Dispatcher);
+        _borderFlashManager = new BorderFlashManager();
+        _dndManager = new DndManager(
+            _foregroundSource,
+            _borderFlashManager,
+            settleScheduler: new DispatcherTimerScheduler(),
+            graceScheduler: new DispatcherTimerScheduler(),
+            settleDuration: TimeSpan.FromSeconds(10),
+            gracePeriod: TimeSpan.FromSeconds(45));
+
+        _stateMachine = new EasyEyesStateMachine(_actions, () => _busyIndicatorManager.IsBusy || _dndManager.IsBusy);
 
         triggerRelay.Connect(trigger =>
         {
@@ -44,17 +58,21 @@ public partial class MainWindow : Window
             App.Log($"  -> NewState: {_stateMachine.CurrentState}");
         });
 
-        _trayIconManager = new TrayIconManager(_stateMachine, _actions, _busyIndicatorManager);
+        _trayIconManager = new TrayIconManager(_stateMachine, _actions, _busyIndicatorManager, _dndManager);
 
-        _busyIndicatorManager.BusyCleared += (_, _) =>
+        _busyIndicatorManager.BusyCleared += (_, _) => OnAnyBusyCleared();
+        _busyIndicatorManager.BecameActive += (_, _) => OnAnyBusyBecameActive();
+
+        _dndManager.BusyCleared += (_, _) => OnAnyBusyCleared();
+        _dndManager.BecameActive += (_, _) => OnAnyBusyBecameActive();
+        _dndManager.StateChanged += (_, _) =>
         {
-            if (_stateMachine.CurrentState == State.Busy)
-                _stateMachine.Fire(Trigger.BusyCleared);
-        };
-        _busyIndicatorManager.BecameActive += (_, _) =>
-        {
-            if (_stateMachine.CurrentState == State.OverlayDisplayed)
-                _stateMachine.Fire(Trigger.EnterBusy);
+            // When DND turns on (Off → Arming), treat it like a busy source becoming
+            // active so an already-displayed overlay is hidden immediately. This
+            // closes the race in issue #5 where the overlay was shown between
+            // ActivityTimerExpired and DND being activated.
+            if (_dndManager.CurrentState != DndState.Off)
+                OnAnyBusyBecameActive();
         };
 
         _busyIndicatorManager.SetMeetingMode(MeetingMode.On);
@@ -67,6 +85,31 @@ public partial class MainWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _actions.StartActivityTimer();
+    }
+
+    /// <summary>
+    /// Called when any busy source (meeting indicator or DND) reports that it
+    /// has cleared. Only fires <see cref="Trigger.BusyCleared"/> when BOTH
+    /// sources agree that they are no longer busy; otherwise the overlay would
+    /// re-appear while the other source is still suppressing it.
+    /// </summary>
+    private void OnAnyBusyCleared()
+    {
+        if (_stateMachine.CurrentState != State.Busy)
+            return;
+        if (_busyIndicatorManager.IsBusy || _dndManager.IsBusy)
+            return;
+        _stateMachine.Fire(Trigger.BusyCleared);
+    }
+
+    /// <summary>
+    /// Called when any busy source becomes active. If the overlay is currently
+    /// displayed, transitions to <see cref="State.Busy"/> to hide it.
+    /// </summary>
+    private void OnAnyBusyBecameActive()
+    {
+        if (_stateMachine.CurrentState == State.OverlayDisplayed)
+            _stateMachine.Fire(Trigger.EnterBusy);
     }
 
     private void DoShowOverlay()
@@ -100,6 +143,7 @@ public partial class MainWindow : Window
         _sessionListener.SessionLocked += (_, _) =>
         {
             App.Log($"SessionLocked, State={_stateMachine.CurrentState}");
+            DeactivateDndOnLock();
             _stateMachine.Fire(Trigger.ScreenLock);
             PauseMediaIfEnabled();
         };
@@ -107,10 +151,12 @@ public partial class MainWindow : Window
         {
             App.Log($"SessionUnlocked, State={_stateMachine.CurrentState}");
             _stateMachine.Fire(Trigger.ScreenUnlock);
+            FlashDndClearedOnUnlock();
         };
         _sessionListener.DisplayOff += (_, _) =>
         {
             App.Log($"DisplayOff, State={_stateMachine.CurrentState}");
+            DeactivateDndOnLock();
             _stateMachine.Fire(Trigger.ScreenSleep);
             PauseMediaIfEnabled();
         };
@@ -118,6 +164,7 @@ public partial class MainWindow : Window
         {
             App.Log($"DisplayOn, State={_stateMachine.CurrentState}");
             _stateMachine.Fire(Trigger.ScreenWake);
+            FlashDndClearedOnUnlock();
         };
     }
 
@@ -139,6 +186,24 @@ public partial class MainWindow : Window
         }
     }
 
+    private void DeactivateDndOnLock()
+    {
+        if (_dndManager.CurrentState != DndState.Off)
+        {
+            _wasDndActiveOnLock = true;
+            _dndManager.Deactivate();
+        }
+    }
+
+    private void FlashDndClearedOnUnlock()
+    {
+        if (_wasDndActiveOnLock)
+        {
+            _wasDndActiveOnLock = false;
+            _dndManager.FlashCleared();
+        }
+    }
+
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         App.Log($"MainWindow OnClosing, State={_stateMachine.CurrentState}");
@@ -151,6 +216,9 @@ public partial class MainWindow : Window
         _sessionListener?.Dispose();
         _mediaDeviceMonitor.Dispose();
         _busyIndicatorManager.Dispose();
+        _dndManager.Dispose();
+        _borderFlashManager.Dispose();
+        _foregroundSource.Dispose();
         _overlayManager.Dispose();
         _trayIconManager.Dispose();
         base.OnClosed(e);

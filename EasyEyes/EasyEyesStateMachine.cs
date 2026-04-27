@@ -107,6 +107,16 @@ public class EasyEyesStateMachine
             .Permit(Trigger.EnterBusy, State.Busy)
             .OnEntry(() =>
             {
+                // Defensive: if a busy source is active at the instant we
+                // would show the overlay, route straight to Busy instead.
+                // Protects against any source-vs-trigger race (e.g., DND
+                // is in Arming when ActivityTimerExpired fires). See
+                // issue #5 in issues-with-dnd.md.
+                if (_isBusy())
+                {
+                    _machine.Fire(Trigger.EnterBusy);
+                    return;
+                }
                 _wasOverlayDisplayed = true;
                 _actions.ShowOverlay();
             });
