@@ -45,8 +45,11 @@ public sealed class DndManager : IDisposable
     private readonly IDndFlashFeedback _borderFlashManager;
     private readonly BusyIndicator _indicator;
     private readonly ITimerScheduler _settleScheduler;
+    private readonly ITimerScheduler _armingProbeScheduler;
     private readonly TimeSpan _settleDuration;
+    private readonly TimeSpan _armingProbeInterval;
     private readonly TimeSpan _gracePeriod;
+    private IntPtr? _lastProbedFullscreenHwnd;
     private bool _disposed;
 
     /// <summary>
@@ -90,13 +93,17 @@ public sealed class DndManager : IDisposable
         IDndFlashFeedback borderFlashManager,
         ITimerScheduler settleScheduler,
         ITimerScheduler graceScheduler,
+        ITimerScheduler armingProbeScheduler,
         TimeSpan settleDuration,
-        TimeSpan gracePeriod)
+        TimeSpan gracePeriod,
+        TimeSpan armingProbeInterval)
     {
         _foregroundSource = foregroundSource;
         _borderFlashManager = borderFlashManager;
         _settleScheduler = settleScheduler;
+        _armingProbeScheduler = armingProbeScheduler;
         _settleDuration = settleDuration;
+        _armingProbeInterval = armingProbeInterval;
         _gracePeriod = gracePeriod;
 
         _indicator = new BusyIndicator(foregroundSource, graceScheduler, gracePeriod);
@@ -113,7 +120,10 @@ public sealed class DndManager : IDisposable
 
     /// <summary>
     /// Starts the DND arming flow: shows a persistent amber border and
-    /// begins the settle timer.
+    /// begins the settle timer. In parallel, polls the foreground window
+    /// every <c>armingProbeInterval</c>; if a fullscreen window stays
+    /// focused across two consecutive polls, the manager locks early
+    /// without waiting for the full settle period.
     /// </summary>
     public void Activate()
     {
@@ -126,6 +136,8 @@ public sealed class DndManager : IDisposable
         StateChanged?.Invoke(this, EventArgs.Empty);
         _borderFlashManager.ShowPersistent(BorderFlashManager.ArmingColor);
         _settleScheduler.Start(_settleDuration, OnSettleExpired);
+        _lastProbedFullscreenHwnd = _foregroundSource.GetFullscreenForegroundWindow();
+        _armingProbeScheduler.Start(_armingProbeInterval, OnArmingProbeTick);
     }
 
     /// <summary>
@@ -140,6 +152,8 @@ public sealed class DndManager : IDisposable
         }
 
         _settleScheduler.Cancel();
+        _armingProbeScheduler.Cancel();
+        _lastProbedFullscreenHwnd = null;
         _indicator.Disable();
         _foregroundSource.Release();
         _borderFlashManager.BloomAndFade(BorderFlashManager.ClearedColor);
@@ -159,6 +173,8 @@ public sealed class DndManager : IDisposable
 
     private void OnSettleExpired()
     {
+        _armingProbeScheduler.Cancel();
+        _lastProbedFullscreenHwnd = null;
         if (!_foregroundSource.TryCapture())
         {
             // Foreground window did not satisfy capture preconditions
@@ -175,6 +191,31 @@ public sealed class DndManager : IDisposable
         _indicator.Enable();
         CurrentState = DndState.Active;
         StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Periodic check during arming: if the same fullscreen window has
+    /// been focused for two consecutive ticks, lock early instead of
+    /// waiting out the full settle period. Otherwise record the current
+    /// fullscreen hwnd (or null) and reschedule the probe.
+    /// </summary>
+    private void OnArmingProbeTick()
+    {
+        if (CurrentState != DndState.Arming)
+        {
+            return;
+        }
+
+        var current = _foregroundSource.GetFullscreenForegroundWindow();
+        if (current.HasValue && current == _lastProbedFullscreenHwnd)
+        {
+            _settleScheduler.Cancel();
+            OnSettleExpired();
+            return;
+        }
+
+        _lastProbedFullscreenHwnd = current;
+        _armingProbeScheduler.Start(_armingProbeInterval, OnArmingProbeTick);
     }
 
     private void OnIndicatorCleared(object? sender, EventArgs e)
@@ -237,6 +278,7 @@ public sealed class DndManager : IDisposable
         _foregroundSource.Deactivated -= OnForegroundDeactivated;
         _foregroundSource.Activated -= OnForegroundActivated;
         _settleScheduler.Cancel();
+        _armingProbeScheduler.Cancel();
         _indicator.Disable();
         _foregroundSource.Release();
         GC.SuppressFinalize(this);

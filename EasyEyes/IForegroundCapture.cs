@@ -20,4 +20,12 @@ public interface IForegroundCapture : IStateSource
     /// Clears the captured process and stops monitoring.
     /// </summary>
     void Release();
+
+    /// <summary>
+    /// Returns the handle of the current foreground window if it is a
+    /// fullscreen window, or <c>null</c> otherwise. Used during DND
+    /// arming to detect a stable fullscreen focus and lock early
+    /// without waiting for the full settle period.
+    /// </summary>
+    IntPtr? GetFullscreenForegroundWindow();
 }

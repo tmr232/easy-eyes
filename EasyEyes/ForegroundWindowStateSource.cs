@@ -81,6 +81,18 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
         return true;
     }
 
+    /// <inheritdoc />
+    public IntPtr? GetFullscreenForegroundWindow()
+    {
+        var hwnd = NativeMethods.GetForegroundWindow();
+        if (hwnd == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        return WindowInspector.IsFullscreen(hwnd) ? hwnd : null;
+    }
+
     /// <summary>
     /// Clears the captured process and stops polling. Fires
     /// <see cref="Deactivated"/> if the source was active.

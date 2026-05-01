@@ -8,10 +8,12 @@ public class DndManagerTests
     private readonly FakeForegroundCapture _fakeCapture = new();
     private readonly FakeTimerScheduler _settleScheduler = new();
     private readonly FakeTimerScheduler _graceScheduler = new();
+    private readonly FakeTimerScheduler _armingProbeScheduler = new();
     private readonly FakeDndFlashFeedback _flashFeedback = new();
 
     private static readonly TimeSpan SettleDuration = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan GracePeriod = TimeSpan.FromSeconds(45);
+    private static readonly TimeSpan ArmingProbeInterval = TimeSpan.FromSeconds(1);
 
     private DndManager CreateManager()
     {
@@ -20,8 +22,10 @@ public class DndManagerTests
             _flashFeedback,
             _settleScheduler,
             _graceScheduler,
+            _armingProbeScheduler,
             SettleDuration,
-            GracePeriod);
+            GracePeriod,
+            ArmingProbeInterval);
     }
 
     // --- Initial state ---
@@ -435,6 +439,130 @@ public class DndManagerTests
         Assert.Equal("graceHint", _flashFeedback.LastShowType);
     }
 
+    // --- Arming probe: fast-path lock when fullscreen is stable ---
+
+    [Fact]
+    public void Activate_StartsArmingProbe()
+    {
+        var manager = CreateManager();
+        manager.Activate();
+
+        Assert.True(_armingProbeScheduler.IsRunning);
+        Assert.Equal(ArmingProbeInterval, _armingProbeScheduler.LastInterval);
+    }
+
+    [Fact]
+    public void ArmingProbe_StableFullscreen_LocksEarly()
+    {
+        // Fullscreen window focused at activation, still focused at the
+        // next probe tick → lock without waiting for full settle.
+        _fakeCapture.IsActive = true;
+        _fakeCapture.FullscreenForegroundWindow = new IntPtr(0x1234);
+        var manager = CreateManager();
+        manager.Activate();
+
+        _armingProbeScheduler.Expire();
+
+        Assert.Equal(DndState.Active, manager.CurrentState);
+        Assert.True(_fakeCapture.WasCaptured);
+        Assert.False(_settleScheduler.IsRunning);
+        Assert.False(_armingProbeScheduler.IsRunning);
+    }
+
+    [Fact]
+    public void ArmingProbe_NoFullscreen_KeepsArmingAndReschedules()
+    {
+        _fakeCapture.FullscreenForegroundWindow = null;
+        var manager = CreateManager();
+        manager.Activate();
+
+        _armingProbeScheduler.Expire();
+
+        Assert.Equal(DndState.Arming, manager.CurrentState);
+        Assert.True(_settleScheduler.IsRunning);
+        Assert.True(_armingProbeScheduler.IsRunning);
+    }
+
+    [Fact]
+    public void ArmingProbe_FullscreenAppearsAfterActivation_RequiresSecondConfirmingTick()
+    {
+        // Activation: nothing fullscreen. Probe1: a fullscreen window is
+        // now focused (recorded but not yet stable). Probe2: same window
+        // → lock.
+        _fakeCapture.IsActive = true;
+        _fakeCapture.FullscreenForegroundWindow = null;
+        var manager = CreateManager();
+        manager.Activate();
+
+        _fakeCapture.FullscreenForegroundWindow = new IntPtr(0x1234);
+        _armingProbeScheduler.Expire();
+        Assert.Equal(DndState.Arming, manager.CurrentState);
+
+        _armingProbeScheduler.Expire();
+        Assert.Equal(DndState.Active, manager.CurrentState);
+    }
+
+    [Fact]
+    public void ArmingProbe_FullscreenWindowChanges_DoesNotLock()
+    {
+        // Different fullscreen hwnd between ticks → not stable, keep arming.
+        _fakeCapture.IsActive = true;
+        _fakeCapture.FullscreenForegroundWindow = new IntPtr(0x1111);
+        var manager = CreateManager();
+        manager.Activate();
+
+        _fakeCapture.FullscreenForegroundWindow = new IntPtr(0x2222);
+        _armingProbeScheduler.Expire();
+
+        Assert.Equal(DndState.Arming, manager.CurrentState);
+        Assert.True(_armingProbeScheduler.IsRunning);
+    }
+
+    [Fact]
+    public void ArmingProbe_FullscreenLost_ResetsStability()
+    {
+        // Fullscreen at activation, then gone → recorded as null. Even
+        // if the same hwnd reappears, we need another tick to confirm.
+        _fakeCapture.IsActive = true;
+        _fakeCapture.FullscreenForegroundWindow = new IntPtr(0x1234);
+        var manager = CreateManager();
+        manager.Activate();
+
+        _fakeCapture.FullscreenForegroundWindow = null;
+        _armingProbeScheduler.Expire();
+        Assert.Equal(DndState.Arming, manager.CurrentState);
+
+        _fakeCapture.FullscreenForegroundWindow = new IntPtr(0x1234);
+        _armingProbeScheduler.Expire();
+        Assert.Equal(DndState.Arming, manager.CurrentState);
+
+        _armingProbeScheduler.Expire();
+        Assert.Equal(DndState.Active, manager.CurrentState);
+    }
+
+    [Fact]
+    public void Deactivate_CancelsArmingProbe()
+    {
+        var manager = CreateManager();
+        manager.Activate();
+
+        manager.Deactivate();
+
+        Assert.False(_armingProbeScheduler.IsRunning);
+    }
+
+    [Fact]
+    public void SettleExpiry_CancelsArmingProbe()
+    {
+        _fakeCapture.IsActive = true;
+        var manager = CreateManager();
+        manager.Activate();
+
+        _settleScheduler.Expire();
+
+        Assert.False(_armingProbeScheduler.IsRunning);
+    }
+
     // --- Capture rejection (issue #4) ---
 
     [Fact]
@@ -524,6 +652,13 @@ public class FakeForegroundCapture : IForegroundCapture
     /// </summary>
     public bool CaptureSucceeds { get; set; } = true;
 
+    /// <summary>
+    /// Controls the return value of <see cref="GetFullscreenForegroundWindow"/>.
+    /// Defaults to <c>null</c> (no fullscreen window) so existing tests still
+    /// see the full settle countdown.
+    /// </summary>
+    public IntPtr? FullscreenForegroundWindow { get; set; }
+
     public event EventHandler? Activated;
     public event EventHandler? Deactivated;
 
@@ -536,6 +671,11 @@ public class FakeForegroundCapture : IForegroundCapture
     public void Release()
     {
         WasReleased = true;
+    }
+
+    public IntPtr? GetFullscreenForegroundWindow()
+    {
+        return FullscreenForegroundWindow;
     }
 
     public void SimulateActivated()

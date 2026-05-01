@@ -46,8 +46,10 @@ public partial class MainWindow : Window
             _borderFlashManager,
             settleScheduler: new DispatcherTimerScheduler(),
             graceScheduler: new DispatcherTimerScheduler(),
+            armingProbeScheduler: new DispatcherTimerScheduler(),
             settleDuration: TimeSpan.FromSeconds(10),
-            gracePeriod: TimeSpan.FromSeconds(45));
+            gracePeriod: TimeSpan.FromSeconds(45),
+            armingProbeInterval: TimeSpan.FromSeconds(1));
 
         _stateMachine = new EasyEyesStateMachine(_actions, () => _busyIndicatorManager.IsBusy || _dndManager.IsBusy);
 
