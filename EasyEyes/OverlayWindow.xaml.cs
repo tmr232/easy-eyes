@@ -74,6 +74,13 @@ public partial class OverlayWindow : Window
 
     private void OnRendering(object? sender, EventArgs e)
     {
+        // During window teardown (e.g. app shutdown while the overlay is
+        // visible), the HwndSource can be disposed before this handler is
+        // unsubscribed in OnClosed. PointFromScreen then throws because the
+        // Visual is no longer connected to a PresentationSource. Skip the
+        // frame in that case.
+        if (PresentationSource.FromVisual(this) is null) return;
+
         if (!NativeMethods.GetCursorPos(out var pt)) return;
 
         var wpfPoint = PointFromScreen(new Point(pt.X, pt.Y));
