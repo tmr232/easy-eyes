@@ -145,6 +145,58 @@ public class DndManagerTests
         Assert.False(manager.IsBusy);
     }
 
+    [Fact]
+    public void Deactivate_FromArming_FiresBusyCleared()
+    {
+        // Bug: when DND is deactivated from Arming, the inner BusyIndicator
+        // was never enabled (Enable() runs only on settle expiry), so its
+        // Cleared event does not fire — and BusyCleared was never raised.
+        // Combined with an activity-timer expiry that already routed the
+        // outer state machine to Busy, this leaves the app stuck in Busy
+        // with no overlay. Deactivate must always announce that DND is no
+        // longer busy when it transitions out of a busy state.
+        var manager = CreateManager();
+        manager.Activate();
+        var cleared = false;
+        manager.BusyCleared += (_, _) => cleared = true;
+
+        manager.Deactivate();
+
+        Assert.True(cleared);
+    }
+
+    [Fact]
+    public void Deactivate_FromActive_FiresBusyClearedExactlyOnce()
+    {
+        // Regression guard: in the Active path, _indicator.Disable() already
+        // raises Cleared (and through it, BusyCleared). The fix for the
+        // Arming-path bug must not introduce a duplicate fire here.
+        _fakeCapture.IsActive = true;
+        var manager = CreateManager();
+        manager.Activate();
+        _settleScheduler.Expire();
+        var clearedCount = 0;
+        manager.BusyCleared += (_, _) => clearedCount++;
+
+        manager.Deactivate();
+
+        Assert.Equal(1, clearedCount);
+    }
+
+    [Fact]
+    public void Deactivate_FromOff_DoesNotFireBusyCleared()
+    {
+        // Sanity: Deactivate is idempotent when already Off, and must not
+        // synthesize a spurious BusyCleared in that case.
+        var manager = CreateManager();
+        var cleared = false;
+        manager.BusyCleared += (_, _) => cleared = true;
+
+        manager.Deactivate();
+
+        Assert.False(cleared);
+    }
+
     // --- Grace period and clearing ---
 
     [Fact]

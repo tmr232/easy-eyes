@@ -144,6 +144,16 @@ public sealed class DndManager : IDisposable
     /// Immediately deactivates DND, cleaning up all state and showing
     /// a red border flash.
     /// </summary>
+    /// <remarks>
+    /// Always raises <see cref="BusyCleared"/> exactly once when transitioning
+    /// out of a busy state. In the <see cref="DndState.Active"/> path,
+    /// <c>_indicator.Disable()</c> already raises it (via <see cref="OnIndicatorCleared"/>),
+    /// so we only synthesize an extra fire here when the inner indicator was
+    /// never enabled — i.e. when deactivating from <see cref="DndState.Arming"/>.
+    /// Without that, the outer <see cref="EasyEyesStateMachine"/> can be left
+    /// stuck in <see cref="State.Busy"/> after a user manually clears DND
+    /// while the activity timer is already expired.
+    /// </remarks>
     public void Deactivate()
     {
         if (CurrentState == DndState.Off)
@@ -154,11 +164,28 @@ public sealed class DndManager : IDisposable
         _settleScheduler.Cancel();
         _armingProbeScheduler.Cancel();
         _lastProbedFullscreenHwnd = null;
-        _indicator.Disable();
+
+        var busyClearedRaised = false;
+        EventHandler trackBusyCleared = (_, _) => busyClearedRaised = true;
+        BusyCleared += trackBusyCleared;
+        try
+        {
+            _indicator.Disable();
+        }
+        finally
+        {
+            BusyCleared -= trackBusyCleared;
+        }
+
         _foregroundSource.Release();
         _borderFlashManager.BloomAndFade(BorderFlashManager.ClearedColor);
         CurrentState = DndState.Off;
         StateChanged?.Invoke(this, EventArgs.Empty);
+
+        if (!busyClearedRaised)
+        {
+            BusyCleared?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     /// <summary>
