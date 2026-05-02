@@ -7,6 +7,8 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+## [2026.05.02]
+
 ### Added
 
 - Add **Do not disturb** mode — defers the overlay while a video player or game is in the foreground. Activated via the tray menu with a 10-second settle period. An amber border shows during arming, a green flash confirms capture, and a red flash indicates when DND clears (either by switching away, locking the screen, or manually toggling off). Uses a 45-second grace period so brief alt-tabs don't interrupt.
