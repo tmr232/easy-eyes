@@ -28,6 +28,7 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
 {
     private readonly Dispatcher _dispatcher;
     private readonly TimeSpan _pollInterval;
+    private readonly IProcessLifetimeWatcher _lifetimeWatcher;
     private Timer? _pollTimer;
     private uint? _capturedProcessId;
     private volatile bool _lastActive;
@@ -50,18 +51,28 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
 
     /// <inheritdoc />
     /// <remarks>
-    /// Declared here for the interface, but not yet raised by this
-    /// implementation. The kernel-wait wiring lands together with
-    /// <c>Win32ProcessLifetimeWatcher</c> in a later step.
+    /// Raised when the injected <see cref="IProcessLifetimeWatcher"/>
+    /// reports that the captured process has exited. Marshaling onto
+    /// the dispatcher is the watcher's responsibility (the Win32
+    /// implementation does so; the no-op default never fires).
     /// </remarks>
-#pragma warning disable CS0067 // Event is never used (wired up in a later commit)
     public event EventHandler? Terminated;
-#pragma warning restore CS0067
 
-    public ForegroundWindowStateSource(TimeSpan pollInterval, Dispatcher dispatcher)
+    public ForegroundWindowStateSource(
+        TimeSpan pollInterval,
+        Dispatcher dispatcher)
+        : this(pollInterval, dispatcher, new NullProcessLifetimeWatcher())
+    {
+    }
+
+    public ForegroundWindowStateSource(
+        TimeSpan pollInterval,
+        Dispatcher dispatcher,
+        IProcessLifetimeWatcher lifetimeWatcher)
     {
         _dispatcher = dispatcher;
         _pollInterval = pollInterval;
+        _lifetimeWatcher = lifetimeWatcher;
     }
 
     /// <summary>
@@ -88,6 +99,7 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
         _lastActive = true;
         _pollTimer?.Dispose();
         _pollTimer = new Timer(Poll, null, _pollInterval, _pollInterval);
+        _lifetimeWatcher.Watch(processId, OnLifetimeWatcherTerminated);
         return true;
     }
 
@@ -112,12 +124,23 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
         _pollTimer?.Dispose();
         _pollTimer = null;
         _capturedProcessId = null;
+        _lifetimeWatcher.Cancel();
 
         if (_lastActive)
         {
             _lastActive = false;
             _ = _dispatcher.BeginInvoke(() => Deactivated?.Invoke(this, EventArgs.Empty));
         }
+    }
+
+    /// <summary>
+    /// Callback handed to the lifetime watcher. The watcher is contractually
+    /// responsible for delivering this on the dispatcher thread, so we
+    /// raise <see cref="Terminated"/> directly here.
+    /// </summary>
+    private void OnLifetimeWatcherTerminated()
+    {
+        Terminated?.Invoke(this, EventArgs.Empty);
     }
 
     private void Poll(object? state)
@@ -166,5 +189,7 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
 
         _disposed = true;
         _pollTimer?.Dispose();
+        _lifetimeWatcher.Cancel();
+        (_lifetimeWatcher as IDisposable)?.Dispose();
     }
 }
