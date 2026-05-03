@@ -116,6 +116,7 @@ public sealed class DndManager : IDisposable
         // visual handoff so the user can see the grace timer running.
         _foregroundSource.Deactivated += OnForegroundDeactivated;
         _foregroundSource.Activated += OnForegroundActivated;
+        _foregroundSource.Terminated += OnForegroundTerminated;
     }
 
     /// <summary>
@@ -294,6 +295,34 @@ public sealed class DndManager : IDisposable
         _borderFlashManager.CancelGraceHint(BorderFlashManager.LockedColor);
     }
 
+    /// <summary>
+    /// Foreground source signalled the captured process has died. There
+    /// is no possibility of the user "coming back" to a process that no
+    /// longer exists, so DND exits immediately rather than waiting out
+    /// the grace period. Ignored when not <see cref="DndState.Active"/>:
+    /// in <see cref="DndState.Arming"/> nothing has been captured yet,
+    /// and in <see cref="DndState.Off"/> a late kernel signal is meaningless.
+    /// </summary>
+    /// <remarks>
+    /// Reuses <see cref="OnIndicatorCleared"/> by routing through
+    /// <c>_indicator.Disable()</c>: the indicator is <c>IsActive == true</c>
+    /// throughout the entire <see cref="DndState.Active"/> phase (including
+    /// the grace period — see <see cref="BusyIndicator"/>), so Disable
+    /// fires Cleared, which performs the standard cleanup (release source,
+    /// red bloom, set Off, raise StateChanged + BusyCleared) and cancels
+    /// the grace timer. Single-firing is therefore inherited from the
+    /// existing path.
+    /// </remarks>
+    private void OnForegroundTerminated(object? sender, EventArgs e)
+    {
+        if (CurrentState != DndState.Active)
+        {
+            return;
+        }
+
+        _indicator.Disable();
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -304,6 +333,7 @@ public sealed class DndManager : IDisposable
         _disposed = true;
         _foregroundSource.Deactivated -= OnForegroundDeactivated;
         _foregroundSource.Activated -= OnForegroundActivated;
+        _foregroundSource.Terminated -= OnForegroundTerminated;
         _settleScheduler.Cancel();
         _armingProbeScheduler.Cancel();
         _indicator.Disable();

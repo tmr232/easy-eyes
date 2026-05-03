@@ -291,6 +291,141 @@ public class DndManagerTests
         Assert.False(_graceScheduler.IsRunning);
     }
 
+    // --- Process termination (immediate exit, no grace) ---
+
+    [Fact]
+    public void Active_WhenSourceTerminates_TransitionsToOff()
+    {
+        // When the captured process dies there is no possibility of the
+        // user "coming back" to it, so DND must exit immediately rather
+        // than waiting out the grace period.
+        _fakeCapture.IsActive = true;
+        var manager = CreateManager();
+        manager.Activate();
+        _settleScheduler.Expire();
+
+        _fakeCapture.SimulateTerminated();
+
+        Assert.Equal(DndState.Off, manager.CurrentState);
+        Assert.False(manager.IsBusy);
+    }
+
+    [Fact]
+    public void Active_WhenSourceTerminates_ShowsClearedFlash()
+    {
+        _fakeCapture.IsActive = true;
+        var manager = CreateManager();
+        manager.Activate();
+        _settleScheduler.Expire();
+        _flashFeedback.Reset();
+
+        _fakeCapture.SimulateTerminated();
+
+        Assert.Equal("bloom", _flashFeedback.LastShowType);
+        Assert.Equal(BorderFlashManager.ClearedColor, _flashFeedback.LastColor);
+    }
+
+    [Fact]
+    public void Active_WhenSourceTerminates_FiresBusyClearedExactlyOnce()
+    {
+        _fakeCapture.IsActive = true;
+        var manager = CreateManager();
+        manager.Activate();
+        _settleScheduler.Expire();
+        var clearedCount = 0;
+        manager.BusyCleared += (_, _) => clearedCount++;
+
+        _fakeCapture.SimulateTerminated();
+
+        Assert.Equal(1, clearedCount);
+    }
+
+    [Fact]
+    public void Active_WhenSourceTerminates_DoesNotStartOrWaitForGrace()
+    {
+        // Termination must bypass the grace timer entirely.
+        _fakeCapture.IsActive = true;
+        var manager = CreateManager();
+        manager.Activate();
+        _settleScheduler.Expire();
+
+        _fakeCapture.SimulateTerminated();
+
+        Assert.False(_graceScheduler.IsRunning);
+        Assert.Equal(DndState.Off, manager.CurrentState);
+    }
+
+    [Fact]
+    public void Active_DuringGrace_WhenSourceTerminates_TransitionsToOffImmediately()
+    {
+        // User alt-tabbed away (grace is running), then the captured
+        // process dies. DND must exit at once instead of waiting for
+        // the grace timer to fire.
+        _fakeCapture.IsActive = true;
+        var manager = CreateManager();
+        manager.Activate();
+        _settleScheduler.Expire();
+        _fakeCapture.SimulateDeactivated();
+        Assert.True(_graceScheduler.IsRunning);
+
+        _fakeCapture.SimulateTerminated();
+
+        Assert.Equal(DndState.Off, manager.CurrentState);
+        Assert.False(_graceScheduler.IsRunning);
+    }
+
+    [Fact]
+    public void Active_DuringGrace_WhenSourceTerminates_FiresBusyClearedExactlyOnce()
+    {
+        // Race guard: the natural grace-expiry path and the termination
+        // path must not both fire BusyCleared.
+        _fakeCapture.IsActive = true;
+        var manager = CreateManager();
+        manager.Activate();
+        _settleScheduler.Expire();
+        _fakeCapture.SimulateDeactivated();
+        var clearedCount = 0;
+        manager.BusyCleared += (_, _) => clearedCount++;
+
+        _fakeCapture.SimulateTerminated();
+        // A late grace expiry (cancelled in production, but be defensive
+        // about the test scheduler's fake firing) must be a no-op.
+        if (_graceScheduler.IsRunning)
+        {
+            _graceScheduler.Expire();
+        }
+
+        Assert.Equal(1, clearedCount);
+    }
+
+    [Fact]
+    public void Arming_WhenSourceTerminates_IsIgnored()
+    {
+        // Nothing has been captured yet, so a stray Terminated signal
+        // must not affect state or visuals.
+        var manager = CreateManager();
+        manager.Activate();
+        _flashFeedback.Reset();
+
+        _fakeCapture.SimulateTerminated();
+
+        Assert.Equal(DndState.Arming, manager.CurrentState);
+        Assert.Null(_flashFeedback.LastShowType);
+    }
+
+    [Fact]
+    public void Off_WhenSourceTerminates_IsIgnored()
+    {
+        var manager = CreateManager();
+        var cleared = false;
+        manager.BusyCleared += (_, _) => cleared = true;
+
+        _fakeCapture.SimulateTerminated();
+
+        Assert.Equal(DndState.Off, manager.CurrentState);
+        Assert.False(cleared);
+    }
+
     // --- BecameActive event ---
 
     [Fact]
