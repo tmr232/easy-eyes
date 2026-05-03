@@ -48,6 +48,16 @@ public sealed class ForegroundWindowStateSource : IForegroundCapture, IDisposabl
     /// </summary>
     public event EventHandler? Deactivated;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Declared here for the interface, but not yet raised by this
+    /// implementation. The kernel-wait wiring lands together with
+    /// <c>Win32ProcessLifetimeWatcher</c> in a later step.
+    /// </remarks>
+#pragma warning disable CS0067 // Event is never used (wired up in a later commit)
+    public event EventHandler? Terminated;
+#pragma warning restore CS0067
+
     public ForegroundWindowStateSource(TimeSpan pollInterval, Dispatcher dispatcher)
     {
         _dispatcher = dispatcher;

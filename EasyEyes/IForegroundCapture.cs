@@ -28,4 +28,18 @@ public interface IForegroundCapture : IStateSource
     /// without waiting for the full settle period.
     /// </summary>
     IntPtr? GetFullscreenForegroundWindow();
+
+    /// <summary>
+    /// Fires when the captured process has terminated. Allows DND to bail
+    /// out immediately rather than waiting out the full grace period
+    /// after the foreground window goes away — there is no possibility
+    /// of the user "coming back" to a process that no longer exists.
+    /// </summary>
+    /// <remarks>
+    /// Always raised on the dispatcher thread. Never fires when nothing
+    /// is captured, and is silenced after <see cref="Release"/> so a
+    /// late kernel signal cannot reach subscribers after they have torn
+    /// down their state.
+    /// </remarks>
+    event EventHandler? Terminated;
 }

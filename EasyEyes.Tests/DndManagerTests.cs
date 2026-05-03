@@ -197,6 +197,21 @@ public class DndManagerTests
         Assert.False(cleared);
     }
 
+    // --- Test infrastructure sanity ---
+
+    [Fact]
+    public void FakeForegroundCapture_SimulateTerminated_RaisesEvent()
+    {
+        // Guards the test seam used by the upcoming "process termination"
+        // tests: SimulateTerminated() must reach subscribers.
+        var raised = false;
+        _fakeCapture.Terminated += (_, _) => raised = true;
+
+        _fakeCapture.SimulateTerminated();
+
+        Assert.True(raised);
+    }
+
     // --- Grace period and clearing ---
 
     [Fact]
@@ -713,6 +728,7 @@ public class FakeForegroundCapture : IForegroundCapture
 
     public event EventHandler? Activated;
     public event EventHandler? Deactivated;
+    public event EventHandler? Terminated;
 
     public bool TryCapture()
     {
@@ -738,6 +754,11 @@ public class FakeForegroundCapture : IForegroundCapture
     public void SimulateDeactivated()
     {
         Deactivated?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void SimulateTerminated()
+    {
+        Terminated?.Invoke(this, EventArgs.Empty);
     }
 }
 
