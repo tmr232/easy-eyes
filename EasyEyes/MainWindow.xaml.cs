@@ -39,7 +39,10 @@ public partial class MainWindow : Window
             graceScheduler: new DispatcherTimerScheduler(),
             gracePeriod: TimeSpan.FromSeconds(5));
 
-        _foregroundSource = new ForegroundWindowStateSource(TimeSpan.FromSeconds(1), Dispatcher);
+        _foregroundSource = new ForegroundWindowStateSource(
+            TimeSpan.FromSeconds(1),
+            Dispatcher,
+            new Win32ProcessLifetimeWatcher(Dispatcher));
         _borderFlashManager = new BorderFlashManager();
         _dndManager = new DndManager(
             _foregroundSource,
