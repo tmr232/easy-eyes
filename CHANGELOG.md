@@ -7,6 +7,14 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+### Added
+
+- Exit Do Not Disturb immediately when the captured process terminates instead of waiting out the full grace period. There is no possibility of the user "coming back" to a process that no longer exists, so DND now plays the standard red bloom-and-fade and clears at once. Built on a new `IProcessLifetimeWatcher` abstraction with a Win32 implementation that uses `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE)` plus `ThreadPool.RegisterWaitForSingleObject` for a kernel-signalled wait — no extra polling. If `OpenProcess` fails (process already gone, access denied, packaged-app restrictions) the watcher silently degrades and DND falls back to the existing grace-period behavior.
+
+### Fixed
+
+- Fix the EasyEyes state machine getting stuck in `Busy` after the user manually disables Do Not Disturb while the activity timer was already expired. `DndManager.Deactivate()` from the `Arming` state never raised `BusyCleared` because the inner `BusyIndicator` had not yet been enabled, leaving the app showing no overlay with both busy sources reporting clear. Deactivate now always raises `BusyCleared` exactly once when transitioning out of a busy state, while preserving the single-fire invariant for the `Active` path.
+
 ## [2026.05.02]
 
 ### Added
