@@ -53,6 +53,17 @@ public sealed class DndManager : IDisposable
     private bool _disposed;
 
     /// <summary>
+    /// Re-entrancy guard for <see cref="ClearActiveDnd"/>. Set while a
+    /// teardown is in progress so the inner <see cref="_indicator"/>'s
+    /// synchronous <c>Cleared</c> event (raised from inside Disable) does
+    /// not re-enter <see cref="OnIndicatorCleared"/> and run the cleanup
+    /// twice. Also lets the natural grace-expiry path delegate to the
+    /// same helper without producing duplicate <see cref="BusyCleared"/>
+    /// fires.
+    /// </summary>
+    private bool _isClearing;
+
+    /// <summary>
     /// Whether DND should defer the overlay. True whenever DND is not
     /// <see cref="DndState.Off"/> — that is, during <see cref="DndState.Arming"/>
     /// (the user has expressed intent and the amber border is up) and
@@ -147,13 +158,11 @@ public sealed class DndManager : IDisposable
     /// </summary>
     /// <remarks>
     /// Always raises <see cref="BusyCleared"/> exactly once when transitioning
-    /// out of a busy state. In the <see cref="DndState.Active"/> path,
-    /// <c>_indicator.Disable()</c> already raises it (via <see cref="OnIndicatorCleared"/>),
-    /// so we only synthesize an extra fire here when the inner indicator was
-    /// never enabled — i.e. when deactivating from <see cref="DndState.Arming"/>.
-    /// Without that, the outer <see cref="EasyEyesStateMachine"/> can be left
-    /// stuck in <see cref="State.Busy"/> after a user manually clears DND
-    /// while the activity timer is already expired.
+    /// out of a busy state. Routes through <see cref="ClearActiveDnd"/> so
+    /// the same teardown happens regardless of whether we came from
+    /// <see cref="DndState.Arming"/> (indicator never enabled) or
+    /// <see cref="DndState.Active"/> (indicator enabled, possibly with
+    /// <c>IsActive == false</c>).
     /// </remarks>
     public void Deactivate()
     {
@@ -162,31 +171,7 @@ public sealed class DndManager : IDisposable
             return;
         }
 
-        _settleScheduler.Cancel();
-        _armingProbeScheduler.Cancel();
-        _lastProbedFullscreenHwnd = null;
-
-        var busyClearedRaised = false;
-        EventHandler trackBusyCleared = (_, _) => busyClearedRaised = true;
-        BusyCleared += trackBusyCleared;
-        try
-        {
-            _indicator.Disable();
-        }
-        finally
-        {
-            BusyCleared -= trackBusyCleared;
-        }
-
-        _foregroundSource.Release();
-        _borderFlashManager.BloomAndFade(BorderFlashManager.ClearedColor);
-        CurrentState = DndState.Off;
-        StateChanged?.Invoke(this, EventArgs.Empty);
-
-        if (!busyClearedRaised)
-        {
-            BusyCleared?.Invoke(this, EventArgs.Empty);
-        }
+        ClearActiveDnd();
     }
 
     /// <summary>
@@ -248,11 +233,15 @@ public sealed class DndManager : IDisposable
 
     private void OnIndicatorCleared(object? sender, EventArgs e)
     {
-        _foregroundSource.Release();
-        _borderFlashManager.BloomAndFade(BorderFlashManager.ClearedColor);
-        CurrentState = DndState.Off;
-        StateChanged?.Invoke(this, EventArgs.Empty);
-        BusyCleared?.Invoke(this, e);
+        // Re-entered from inside ClearActiveDnd's call to _indicator.Disable().
+        // The outer ClearActiveDnd will run (or already ran) the teardown;
+        // bail out so we don't double-fire BusyCleared / double-bloom.
+        if (_isClearing)
+        {
+            return;
+        }
+
+        ClearActiveDnd();
     }
 
     private void OnIndicatorBecameActive(object? sender, EventArgs e)
@@ -304,14 +293,15 @@ public sealed class DndManager : IDisposable
     /// and in <see cref="DndState.Off"/> a late kernel signal is meaningless.
     /// </summary>
     /// <remarks>
-    /// Reuses <see cref="OnIndicatorCleared"/> by routing through
-    /// <c>_indicator.Disable()</c>: the indicator is <c>IsActive == true</c>
-    /// throughout the entire <see cref="DndState.Active"/> phase (including
-    /// the grace period — see <see cref="BusyIndicator"/>), so Disable
-    /// fires Cleared, which performs the standard cleanup (release source,
-    /// red bloom, set Off, raise StateChanged + BusyCleared) and cancels
-    /// the grace timer. Single-firing is therefore inherited from the
-    /// existing path.
+    /// Routes through <see cref="ClearActiveDnd"/> rather than relying on
+    /// <c>_indicator.Disable()</c> to fire <c>Cleared</c>: the indicator's
+    /// <c>IsActive</c> flag is not strictly coupled to <see cref="CurrentState"/>
+    /// (it can be <c>false</c> even while the manager is <see cref="DndState.Active"/>,
+    /// e.g. if the foreground had drifted off the captured app between
+    /// <c>TryCapture</c> and <c>Enable</c>, or if a natural grace expiry
+    /// raced the kernel signal). Without the unconditional teardown the
+    /// border could be left on screen forever — see the regression test
+    /// <c>Active_WhenSourceTerminates_ClearsEvenIfIndicatorIsActiveIsFalse</c>.
     /// </remarks>
     private void OnForegroundTerminated(object? sender, EventArgs e)
     {
@@ -320,7 +310,50 @@ public sealed class DndManager : IDisposable
             return;
         }
 
-        _indicator.Disable();
+        ClearActiveDnd();
+    }
+
+    /// <summary>
+    /// Single source of truth for tearing DND down: cancels timers, disables
+    /// the indicator, releases the foreground source, plays the cleared
+    /// bloom, transitions to <see cref="DndState.Off"/>, and raises
+    /// <see cref="StateChanged"/> + <see cref="BusyCleared"/> exactly once.
+    /// </summary>
+    /// <remarks>
+    /// All paths that exit a busy state (<see cref="Deactivate"/>,
+    /// <see cref="OnIndicatorCleared"/> via natural grace expiry, and
+    /// <see cref="OnForegroundTerminated"/>) funnel through here. The
+    /// <see cref="_isClearing"/> guard makes the helper re-entrancy-safe:
+    /// when <c>_indicator.Disable()</c> synchronously fires its
+    /// <c>Cleared</c> event the re-entered <see cref="OnIndicatorCleared"/>
+    /// sees the flag and bails, so <see cref="BusyCleared"/> and
+    /// <see cref="BloomAndFade"/> still fire exactly once.
+    /// </remarks>
+    private void ClearActiveDnd()
+    {
+        if (_isClearing)
+        {
+            return;
+        }
+
+        _isClearing = true;
+        try
+        {
+            _settleScheduler.Cancel();
+            _armingProbeScheduler.Cancel();
+            _lastProbedFullscreenHwnd = null;
+
+            _indicator.Disable();
+            _foregroundSource.Release();
+            _borderFlashManager.BloomAndFade(BorderFlashManager.ClearedColor);
+            CurrentState = DndState.Off;
+            StateChanged?.Invoke(this, EventArgs.Empty);
+            BusyCleared?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            _isClearing = false;
+        }
     }
 
     public void Dispose()
