@@ -51,11 +51,6 @@ public sealed class TrayIconManager : IDisposable
         };
 
         var menu = new Forms.ContextMenuStrip();
-        menu.Closing += (_, e) =>
-        {
-            if (e.CloseReason == Forms.ToolStripDropDownCloseReason.ItemClicked)
-                e.Cancel = true;
-        };
 
         _activityTimeRemainingLabel = new Forms.ToolStripLabel { Enabled = false };
         menu.Items.Add(_activityTimeRemainingLabel);
@@ -69,14 +64,12 @@ public sealed class TrayIconManager : IDisposable
                 _stateMachine.Fire(Trigger.Resume);
             else
                 _stateMachine.Fire(Trigger.PauseUntilUnlock);
-            UpdateTrayMenu();
         };
         menu.Items.Add(_pauseUntilUnlockItem);
 
         _pauseForItem = new Forms.ToolStripMenuItem("Pause for...");
         _pauseForItem.Click += (_, _) =>
         {
-            menu.Close();
             var dialog = new PauseForDialog();
             if (dialog.ShowDialog() == true)
             {
@@ -137,7 +130,6 @@ public sealed class TrayIconManager : IDisposable
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) =>
         {
-            menu.Close();
             Dispose();
             Application.Current.Shutdown();
         });
