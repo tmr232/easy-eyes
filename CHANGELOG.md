@@ -7,6 +7,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+### Changed
+
+- Revert the "keep tray menu open when clicking toggle items" behavior from 2026.04.18. The tray menu now closes after a click again (the standard `NotifyIcon` behavior). The `ContextMenuStrip.Closing` cancellation, the explicit `menu.Close()` calls in "Pause for..." and "Exit", and the post-trigger `UpdateTrayMenu()` in "Pause until unlock" are gone — `menu.Opening` still refreshes labels and visibility on next open.
+
 ### Added
 
 - Exit Do Not Disturb immediately when the captured process terminates instead of waiting out the full grace period. There is no possibility of the user "coming back" to a process that no longer exists, so DND now plays the standard red bloom-and-fade and clears at once. Built on a new `IProcessLifetimeWatcher` abstraction with a Win32 implementation that uses `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE)` plus `ThreadPool.RegisterWaitForSingleObject` for a kernel-signalled wait — no extra polling. If `OpenProcess` fails (process already gone, access denied, packaged-app restrictions) the watcher silently degrades and DND falls back to the existing grace-period behavior.
