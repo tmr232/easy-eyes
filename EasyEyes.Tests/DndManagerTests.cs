@@ -399,6 +399,36 @@ public class DndManagerTests
     }
 
     [Fact]
+    public void Active_WhenSourceTerminates_ClearsEvenIfIndicatorIsActiveIsFalse()
+    {
+        // Regression: in production the BusyIndicator's IsActive flag is
+        // not strictly coupled to DndManager.CurrentState. If the source
+        // reports inactive at Enable() time (e.g. the foreground drifted
+        // off the captured app between TryCapture and Enable), the
+        // indicator stays IsActive=false even while the manager is Active.
+        // The previous termination handler routed cleanup through
+        // _indicator.Disable(), which only fires Cleared when wasActive,
+        // so the grace-hint border was never bloomed/closed and DND
+        // stayed Active forever. Termination must do its own teardown.
+        _fakeCapture.IsActive = false;
+        var manager = CreateManager();
+        manager.Activate();
+        _settleScheduler.Expire();
+        Assert.Equal(DndState.Active, manager.CurrentState);
+        _flashFeedback.Reset();
+        var clearedCount = 0;
+        manager.BusyCleared += (_, _) => clearedCount++;
+
+        _fakeCapture.SimulateTerminated();
+
+        Assert.Equal(DndState.Off, manager.CurrentState);
+        Assert.Equal("bloom", _flashFeedback.LastShowType);
+        Assert.Equal(BorderFlashManager.ClearedColor, _flashFeedback.LastColor);
+        Assert.Equal(1, clearedCount);
+        Assert.True(_fakeCapture.WasReleased);
+    }
+
+    [Fact]
     public void Arming_WhenSourceTerminates_IsIgnored()
     {
         // Nothing has been captured yet, so a stray Terminated signal
