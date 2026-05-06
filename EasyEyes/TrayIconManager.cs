@@ -20,6 +20,7 @@ public sealed class TrayIconManager : IDisposable
     private readonly Forms.ToolStripMenuItem _micCameraItem;
     private readonly Forms.ToolStripMenuItem _dndItem;
     private readonly Forms.ToolStripMenuItem _pauseMediaOnLockItem;
+    private readonly Forms.ToolStripMenuItem _startWithWindowsItem;
     private readonly EasyEyesStateMachine _stateMachine;
     private readonly IEasyEyesActions _actions;
     private readonly BusyIndicatorManager _busyIndicatorManager;
@@ -127,6 +128,21 @@ public sealed class TrayIconManager : IDisposable
         _pauseMediaOnLockItem.CheckedChanged += (_, _) => _pauseMediaOnLock = _pauseMediaOnLockItem.Checked;
         menu.Items.Add(_pauseMediaOnLockItem);
 
+        _startWithWindowsItem = new Forms.ToolStripMenuItem("Start with Windows")
+        {
+            CheckOnClick = true,
+            Checked = StartupManager.IsEnabled()
+        };
+        _startWithWindowsItem.CheckedChanged += (_, _) =>
+        {
+            StartupManager.SetEnabled(_startWithWindowsItem.Checked);
+            // Re-read so the menu reflects what's actually persisted (e.g. if
+            // the registry write failed, or the registered path no longer
+            // matches this process).
+            _startWithWindowsItem.Checked = StartupManager.IsEnabled();
+        };
+        menu.Items.Add(_startWithWindowsItem);
+
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) =>
         {
@@ -134,7 +150,13 @@ public sealed class TrayIconManager : IDisposable
             Application.Current.Shutdown();
         });
 
-        menu.Opening += (_, _) => UpdateTrayMenu();
+        menu.Opening += (_, _) =>
+        {
+            UpdateTrayMenu();
+            // Refresh in case the entry was changed externally (Task Manager,
+            // msconfig, another instance, or a manual registry edit).
+            _startWithWindowsItem.Checked = StartupManager.IsEnabled();
+        };
 
         _trayIcon.ContextMenuStrip = menu;
     }

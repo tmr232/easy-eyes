@@ -12,6 +12,7 @@ The app lives in the system tray with pause, resume, and snooze controls.
 - **In a meeting** — 3-way toggle (Off → Until end → Always) that defers the overlay while mic/camera is active, with a configurable grace period
 - **Do not disturb** — defers the overlay while a video player or game is in the foreground; automatically resumes when you switch away (see [Do Not Disturb](#do-not-disturb) below)
 - **Pause media on lock** — automatically pauses playing media when the screen locks or display turns off (enabled by default)
+- **Start with Windows** — optional autostart at user logon via the Run registry key (off by default)
 
 ## Architecture
 
@@ -59,6 +60,7 @@ Core logic is a [Stateless](https://github.com/dotnet-state-machine/stateless) s
 - **In a meeting** — 3-way click-cycle: Off → Until end (auto-disables when meeting ends) → Always (stays active until manually toggled off)
 - **Do not disturb** — checkmark toggle; label shows "(arming...)" during settle, then "(ProcessName)" when locked
 - **Pause media on lock** — checkmark toggle (enabled by default)
+- **Start with Windows** — checkmark toggle; writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\EasyEyes` (off by default). The check reflects whether the registered path matches the currently running executable.
 - **Exit** — shuts down the application
 
 ### Do Not Disturb

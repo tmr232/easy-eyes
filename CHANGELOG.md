@@ -7,6 +7,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+### Added
+
+- Add **Start with Windows** tray menu toggle. When enabled, EasyEyes is launched at the next interactive logon via `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Off by default. The check state requires the registered path to match the currently running executable, so moving `EasyEyes.exe` will surface as "off" in the menu (re-toggle to repoint), rather than silently rewriting the registry on every launch.
+
 ### Changed
 
 - Revert the "keep tray menu open when clicking toggle items" behavior from 2026.04.18. The tray menu now closes after a click again (the standard `NotifyIcon` behavior). The `ContextMenuStrip.Closing` cancellation, the explicit `menu.Close()` calls in "Pause for..." and "Exit", and the post-trigger `UpdateTrayMenu()` in "Pause until unlock" are gone — `menu.Opening` still refreshes labels and visibility on next open.
