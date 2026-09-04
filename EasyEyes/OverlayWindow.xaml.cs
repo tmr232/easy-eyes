@@ -15,6 +15,7 @@ public partial class OverlayWindow : Window
 
     private readonly RadialGradientBrush _spotlightMask;
     private readonly Forms.Screen _screen;
+    private readonly BottomEdgeWindow _bottomEdgeWindow;
     private System.Windows.Media.Brush? _vignetteBrush;
     private bool _spotlightMaskApplied = true;
     private Point? _lastSpotlightPosition;
@@ -22,6 +23,7 @@ public partial class OverlayWindow : Window
     public OverlayWindow(Forms.Screen screen)
     {
         _screen = screen;
+        _bottomEdgeWindow = new BottomEdgeWindow(screen);
 
         _spotlightMask = new RadialGradientBrush
         {
@@ -49,14 +51,15 @@ public partial class OverlayWindow : Window
         var source = PresentationSource.FromVisual(this);
         var transform = source?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
         var topLeft = transform.Transform(new Point(bounds.Left, bounds.Top));
-        var size = transform.Transform(new Point(bounds.Width, bounds.Height));
+        var bottomRight = transform.Transform(new Point(bounds.Right, bounds.Bottom));
+        var lastPhysicalRowTop = transform.Transform(new Point(bounds.Left, bounds.Bottom - 1));
 
         Left = topLeft.X;
         Top = topLeft.Y;
-        Width = size.X;
-        // Leave 1px (physical) uncovered so Windows doesn't treat this as a
-        // fullscreen app and hide the taskbar.
-        Height = size.Y - 1;
+        Width = bottomRight.X - topLeft.X;
+        // Keep the main overlay one physical row short so Windows does not
+        // classify it as fullscreen. BottomEdgeWindow fills that row.
+        Height = lastPhysicalRowTop.Y - topLeft.Y;
     }
 
     public void ShowOverlay()
@@ -66,6 +69,7 @@ public partial class OverlayWindow : Window
         var borderFadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromSeconds(2.5));
         Overlay.BeginAnimation(OpacityProperty, fadeIn);
         ScreenBorder.BeginAnimation(OpacityProperty, borderFadeIn);
+        _bottomEdgeWindow.ShowAndFadeIn(TimeSpan.FromSeconds(2.5));
     }
 
     public void HideOverlay()
@@ -74,6 +78,7 @@ public partial class OverlayWindow : Window
         Overlay.Opacity = 0;
         ScreenBorder.BeginAnimation(OpacityProperty, null);
         ScreenBorder.Opacity = 0;
+        _bottomEdgeWindow.Close();
     }
 
     /// <summary>
@@ -183,6 +188,7 @@ public partial class OverlayWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _bottomEdgeWindow.Close();
         base.OnClosed(e);
     }
 }
