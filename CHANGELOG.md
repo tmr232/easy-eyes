@@ -7,6 +7,22 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.DD`).
 
 ## [Unreleased]
 
+## [2026.09.05]
+
+### Changed
+
+- Reduce the timeout overlay's GPU use while preserving its vignette,
+  cursor-following spotlight, fade, and border. Cursor tracking is now capped
+  at 30 Hz, ignores sub-2-pixel movement, and disables the mask on displays
+  outside the spotlight radius. The static vignette is raster-cached once per
+  visible overlay instead of being recomputed during cursor movement.
+
+### Fixed
+
+- Cover the one-physical-pixel bottom edge intentionally left outside the main
+  overlay to preserve taskbar visibility. A separate static blue edge window
+  fills that row without cursor or spotlight work.
+
 ## [2026.05.20]
 
 ### Added
